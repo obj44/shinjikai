@@ -1,0 +1,38 @@
+# Android/Gradle build output
+.gradle/
+build/
+**/build/
+captures/
+
+# Local SDK config
+local.properties
+
+# IDE files
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# JVM crash dumps / profiling
+*.hprof
+hs_err_pid*
+
+# Signing and secrets
+*.jks
+*.keystore
+keystore.properties
+
+# Android Studio / IntelliJ caches
+.cxx/
+.externalNativeBuild/
+
+# Kotlin/Java compiled artifacts
+*.class
+out/
