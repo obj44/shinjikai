@@ -9,4 +9,10 @@ interface ShinjikaiApi {
 
     @POST("rpc/LoadWordDetails")
     suspend fun loadWordDetails(@Body request: IdRequest): WordDetailsResponse
+
+    @POST("rpc/LoadCategories")
+    suspend fun loadCategories(@Body request: EmptyRequest = EmptyRequest()): LoadCategoriesResponse
+
+    @POST("rpc/LoadCategory")
+    suspend fun loadCategory(@Body request: CategoryRequest): LoadCategoryResponse
 }

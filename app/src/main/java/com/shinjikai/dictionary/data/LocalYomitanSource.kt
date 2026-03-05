@@ -85,6 +85,19 @@ class LocalYomitanSource(
         }
     }
 
+    override suspend fun loadCategories(): Result<LoadCategoriesResponse> {
+        return Result.success(LoadCategoriesResponse())
+    }
+
+    override suspend fun loadCategory(id: Int, page: Int): Result<LoadCategoryResponse> {
+        return Result.success(
+            LoadCategoryResponse(
+                category = CategoryRef(id = id, name = "Local Category"),
+                members = SearchWordsResponse()
+            )
+        )
+    }
+
     private fun buildSearchPreview(glossary: String): String {
         return cleanGlossary(glossary)
             .replace("\n", " ")

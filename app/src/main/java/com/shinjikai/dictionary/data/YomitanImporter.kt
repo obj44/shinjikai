@@ -6,7 +6,9 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import java.io.InputStream
 import java.util.Locale
 import java.util.zip.ZipInputStream
@@ -20,9 +22,11 @@ class YomitanImporter(
         return runCatching {
             withContext(Dispatchers.IO) {
                 val allEntries = parseYomitanZip(zipStream, sourceLabel)
+                coroutineContext.ensureActive()
                 database.withTransaction {
                     yomitanDao.clearTerms()
                     allEntries.chunked(800).forEach { chunk ->
+                        coroutineContext.ensureActive()
                         yomitanDao.upsertAll(chunk)
                     }
                     yomitanDao.upsertMeta(
@@ -49,11 +53,12 @@ class YomitanImporter(
         }
     }
 
-    private fun parseYomitanZip(zipStream: InputStream, sourceLabel: String): List<YomitanTermEntity> {
+    private suspend fun parseYomitanZip(zipStream: InputStream, sourceLabel: String): List<YomitanTermEntity> {
         val terms = ArrayList<YomitanTermEntity>(40_000)
         var idSeed = 1
         ZipInputStream(zipStream).use { zis ->
             while (true) {
+                coroutineContext.ensureActive()
                 val entry = zis.nextEntry ?: break
                 val isTermBank = entry.name.lowercase(Locale.ROOT).startsWith("term_bank_")
                 if (!isTermBank || !entry.name.endsWith(".json")) {
@@ -69,6 +74,7 @@ class YomitanImporter(
                 }
                 val rows = root.asJsonArray
                 for (raw in rows) {
+                    coroutineContext.ensureActive()
                     val parsed = parseTermRow(raw, idSeed, sourceLabel)
                     if (parsed != null) {
                         terms.add(parsed)

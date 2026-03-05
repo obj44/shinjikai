@@ -39,11 +39,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FabPosition
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -93,6 +92,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Typography
 import com.shinjikai.dictionary.data.Meaning
+import com.shinjikai.dictionary.data.RelatedWordItem
 import com.shinjikai.dictionary.data.SearchItem
 import com.shinjikai.dictionary.data.ShinjikaiRepository
 import com.shinjikai.dictionary.data.WordDetailsResponse
@@ -107,6 +107,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.text.DateFormat
+import java.util.Date
 
 private enum class Screen {
     Search,
@@ -130,7 +132,10 @@ fun ShinjikaiApp(
     val yomitanImporter = remember(database) { YomitanImporter(database) }
     var useOfflineMode by remember { mutableStateOf(false) }
     var isImportingOfflineData by remember { mutableStateOf(false) }
+    var offlineImportProgress by remember { mutableStateOf(0f) }
+    var offlineImportPhase by remember { mutableStateOf<String?>(null) }
     var offlineImportStatus by remember { mutableStateOf<String?>(null) }
+    var offlineLastImportEpochMs by remember { mutableStateOf<Long?>(null) }
     var offlineTermCount by remember { mutableStateOf(0) }
     val dictionarySource = remember(useOfflineMode, database) {
         if (useOfflineMode) {
@@ -179,6 +184,8 @@ fun ShinjikaiApp(
             addAll(loadRecentSearches(context))
         }
     }
+    var categoryNameById by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var attemptedCategoryPreload by remember(dictionarySource) { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         bookmarkedItems.clear()
@@ -187,15 +194,30 @@ fun ShinjikaiApp(
 
     val refreshOfflineTermCount: () -> Unit = {
         scope.launch {
-            offlineTermCount = withContext(Dispatchers.IO) {
-                database.yomitanDao().countTerms()
+            val (count, epochMs) = withContext(Dispatchers.IO) {
+                val dao = database.yomitanDao()
+                val count = dao.countTerms()
+                val epoch = dao.getMetaValue("last_import_epoch_ms")?.toLongOrNull()
+                count to epoch
             }
+            offlineTermCount = count
+            offlineLastImportEpochMs = epochMs
         }
     }
 
     LaunchedEffect(currentScreen) {
         if (currentScreen == Screen.Settings) {
             refreshOfflineTermCount()
+        }
+    }
+
+    LaunchedEffect(useOfflineMode, attemptedCategoryPreload) {
+        if (useOfflineMode || attemptedCategoryPreload) return@LaunchedEffect
+        attemptedCategoryPreload = true
+        repository.loadCategories().onSuccess { response ->
+            categoryNameById = response.categories
+                .associate { it.id to it.name.trim() }
+                .filterValues { it.isNotEmpty() }
         }
     }
 
@@ -292,6 +314,13 @@ fun ShinjikaiApp(
         loadingDetails = true
         currentScreen = Screen.Detail
         scope.launch {
+            if (categoryNameById.isEmpty() && !useOfflineMode) {
+                repository.loadCategories().onSuccess { response ->
+                    categoryNameById = response.categories
+                        .associate { it.id to it.name.trim() }
+                        .filterValues { it.isNotEmpty() }
+                }
+            }
             val result = repository.loadWordDetails(item.id)
             loadingDetails = false
             result.onSuccess { details = it }
@@ -308,6 +337,8 @@ fun ShinjikaiApp(
             scope.launch {
                 isImportingOfflineData = true
                 offlineImportStatus = null
+                offlineImportProgress = 0f
+                offlineImportPhase = "جاري تنزيل ملف القاموس..."
                 val result = runCatching {
                     withContext(Dispatchers.IO) {
                         val request = Request.Builder()
@@ -318,14 +349,33 @@ fun ShinjikaiApp(
                                 error("HTTP ${response.code}")
                             }
                             val body = response.body ?: error("No response body")
-                            yomitanImporter.importFromZip(
-                                zipStream = body.byteStream(),
+                            val totalBytes = body.contentLength().takeIf { it > 0L } ?: -1L
+                            val input = body.byteStream()
+                            val downloaded = java.io.ByteArrayOutputStream()
+                            val buffer = ByteArray(16 * 1024)
+                            var read = 0
+                            var copied = 0L
+                            while (input.read(buffer).also { read = it } >= 0) {
+                                downloaded.write(buffer, 0, read)
+                                copied += read
+                                if (totalBytes > 0L) {
+                                    val ratio = copied.toFloat() / totalBytes.toFloat()
+                                    offlineImportProgress = (ratio.coerceIn(0f, 1f) * 0.82f)
+                                }
+                            }
+                            offlineImportPhase = "جاري فهرسة القاموس المحلي..."
+                            offlineImportProgress = offlineImportProgress.coerceAtLeast(0.86f)
+                            val imported = yomitanImporter.importFromZip(
+                                zipStream = downloaded.toByteArray().inputStream(),
                                 sourceLabel = OFFLINE_DICTIONARY_SOURCE
                             ).getOrThrow()
+                            offlineImportProgress = 1f
+                            imported
                         }
                     }
                 }
                 isImportingOfflineData = false
+                offlineImportPhase = null
                 result.onSuccess { importedCount ->
                     offlineImportStatus = "تم تحميل $importedCount كلمة للاستخدام بدون إنترنت."
                     refreshOfflineTermCount()
@@ -371,7 +421,15 @@ fun ShinjikaiApp(
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = {},
+                                    title = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text(appName)
+                                            ModeBadge(useOfflineMode = useOfflineMode)
+                                        }
+                                    },
                                     actions = {
                                         IconButton(onClick = { currentScreen = Screen.Bookmarks }) {
                                             Icon(
@@ -388,20 +446,6 @@ fun ShinjikaiApp(
                                         }
                                     }
                                 )
-                            },
-                            floatingActionButtonPosition = FabPosition.Start,
-                            floatingActionButton = {
-                                FloatingActionButton(
-                                    onClick = {
-                                        focusManager.clearFocus()
-                                        runSearch()
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = "\u0628\u062d\u062b"
-                                    )
-                                }
                             }
                         ) { padding ->
                             Column(
@@ -429,7 +473,19 @@ fun ShinjikaiApp(
                                         shape = RoundedCornerShape(20.dp),
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                         keyboardActions = KeyboardActions(onSearch = { runSearch() }),
-                                        colors = OutlinedTextFieldDefaults.colors(
+                                        trailingIcon = {
+                                            IconButton(
+                                                onClick = {
+                                                    focusManager.clearFocus()
+                                                    runSearch()
+                                                }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Search,
+                                                    contentDescription = "بحث"
+                                                )
+                                            }
+                                        },                                        colors = OutlinedTextFieldDefaults.colors(
                                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                                             unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
                                         )
@@ -573,11 +629,19 @@ fun ShinjikaiApp(
                                                             style = MaterialTheme.typography.titleMedium,
                                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
                                                         )
-                                                        Text(
-                                                            text = item.primaryWriting.ifBlank { item.kana },
-                                                            style = MaterialTheme.typography.headlineMedium,
-                                                            fontWeight = FontWeight.SemiBold
-                                                        )
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = item.primaryWriting.ifBlank { item.kana },
+                                                                style = MaterialTheme.typography.headlineMedium,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                            CommonnessBadge(difficulty = item.difficulty)
+                                                        }
                                                         Text(
                                                             text = forceRtlText(
                                                                 if (useOfflineMode) {
@@ -615,7 +679,15 @@ fun ShinjikaiApp(
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text("\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0643\u0644\u0645\u0629") },
+                                    title = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text("\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0643\u0644\u0645\u0629")
+                                            ModeBadge(useOfflineMode = useOfflineMode)
+                                        }
+                                    },
                                     navigationIcon = {
                                         IconButton(
                                             onClick = {
@@ -720,14 +792,25 @@ fun ShinjikaiApp(
                                     ?.takeIf { it in 1..5 }
                                     ?: item.jlpt.takeIf { it in 1..5 }
 
+                                val categoryLabels = details?.word?.categoryIds
+                                    .orEmpty()
+                                    .mapNotNull { categoryNameById[it] }
+                                    .distinct()
                                 val metadataChips = buildList {
                                     jlptLevel?.let { add("JLPT N$it") }
+                                    addAll(categoryLabels)
                                 }
 
                                 DetailWordHeaderCard(
                                     kanji = kanji,
                                     kana = kana,
                                     chips = metadataChips,
+                                    onCategoryClick = { categoryLabel ->
+                                        currentScreen = Screen.Search
+                                        term = categoryLabel
+                                        focusManager.clearFocus()
+                                        runSearchForTerm(categoryLabel)
+                                    },
                                     onKanjiClick = {
                                         val textToCopy = kanji.trim()
                                         if (textToCopy.isNotEmpty() && textToCopy != "-") {
@@ -738,9 +821,29 @@ fun ShinjikaiApp(
                                 )
 
                                 DefinitionsCard(
-                                    title = "\u0627\u0644\u062a\u0639\u0627\u0631\u064a\u0641",
+                                    title = "المعاني",
                                     definition = definitionChunk
                                 )
+
+                                val relatedGroups = details?.word?.meanings
+                                    .orEmpty()
+                                    .flatMap { meaning ->
+                                        meaning.related.map { group ->
+                                            RelatedGroupUi(
+                                                label = group.label.ifBlank { "مرتبط" },
+                                                items = group.items
+                                            )
+                                        }
+                                    }
+                                    .filter { it.items.isNotEmpty() }
+
+                                if (relatedGroups.isNotEmpty()) {
+                                    RelatedWordsCard(
+                                        title = "كلمات ذات صلة",
+                                        groups = relatedGroups,
+                                        onWordClick = openDetailsById
+                                    )
+                                }
                             }
                         }
                     }
@@ -749,7 +852,15 @@ fun ShinjikaiApp(
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text("\u0627\u0644\u0645\u062d\u0641\u0648\u0638\u0627\u062a") },
+                                    title = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text("\u0627\u0644\u0645\u062d\u0641\u0648\u0638\u0627\u062a")
+                                            ModeBadge(useOfflineMode = useOfflineMode)
+                                        }
+                                    },
                                     navigationIcon = {
                                         IconButton(onClick = navigateBackToSearch) {
                                             Icon(
@@ -834,29 +945,37 @@ fun ShinjikaiApp(
                                                         style = MaterialTheme.typography.titleMedium,
                                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
                                                     )
-                                                    Text(
-                                                        text = item.primaryWriting.ifBlank { item.kana },
-                                                        style = MaterialTheme.typography.headlineMedium,
-                                                        fontWeight = FontWeight.SemiBold
-                                                    )
-                                                    Text(
-                                                        text = forceRtlText(
-                                                            if (useOfflineMode) {
-                                                                formatOfflineSearchPreview(item.meaningSummary)
-                                                            } else {
-                                                                item.meaningSummary
-                                                            }
-                                                        ),
-                                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                                            textDirection = TextDirection.Rtl
-                                                        ),
-                                                        textAlign = TextAlign.Right,
-                                                        maxLines = if (useOfflineMode) 1 else Int.MAX_VALUE,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(top = 8.dp)
-                                                    )
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text(
+                                                                text = item.primaryWriting.ifBlank { item.kana },
+                                                                style = MaterialTheme.typography.headlineMedium,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                            CommonnessBadge(difficulty = item.difficulty)
+                                                        }
+                                                        Text(
+                                                            text = forceRtlText(
+                                                                if (useOfflineMode) {
+                                                                    formatOfflineSearchPreview(item.meaningSummary)
+                                                                } else {
+                                                                    item.meaningSummary
+                                                                }
+                                                            ),
+                                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                                textDirection = TextDirection.Rtl
+                                                            ),
+                                                            textAlign = TextAlign.Right,
+                                                            maxLines = if (useOfflineMode) 1 else Int.MAX_VALUE,
+                                                            overflow = TextOverflow.Ellipsis,
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(top = 8.dp)
+                                                        )
                                                 }
                                             }
                                         }
@@ -902,7 +1021,15 @@ fun ShinjikaiApp(
                         Scaffold(
                             topBar = {
                                 TopAppBar(
-                                    title = { Text("الإعدادات") },
+                                    title = {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Text("الإعدادات")
+                                            ModeBadge(useOfflineMode = useOfflineMode)
+                                        }
+                                    },
                                     navigationIcon = {
                                         IconButton(onClick = navigateBackToSearch) {
                                             Icon(
@@ -1007,6 +1134,13 @@ fun ShinjikaiApp(
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                                         )
+                                        offlineLastImportEpochMs?.let { epoch ->
+                                            Text(
+                                                text = "آخر تحديث محلي: ${formatEpochAsLocal(epoch)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                            )
+                                        }
 
                                         TextButton(
                                             onClick = importOfflineDictionary,
@@ -1019,12 +1153,19 @@ fun ShinjikaiApp(
                                                     strokeWidth = 2.dp
                                                 )
                                                 Text(
-                                                    text = " جاري التحميل...",
+                                                    text = " ${offlineImportPhase ?: "جاري التحميل..."}",
                                                     modifier = Modifier.padding(start = 8.dp)
                                                 )
                                             } else {
                                                 Text("تحميل القاموس للاستخدام بدون إنترنت")
                                             }
+                                        }
+
+                                        if (isImportingOfflineData) {
+                                            LinearProgressIndicator(
+                                                progress = { offlineImportProgress },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
                                         }
 
                                         offlineImportStatus?.let { status ->
@@ -1229,6 +1370,61 @@ private fun buildDefinitionWithWordIdLinks(
 
 private fun forceRtlText(text: String): String = "\u202B$text\u202C"
 
+@Composable
+private fun ModeBadge(useOfflineMode: Boolean) {
+    val label = if (useOfflineMode) "غير متصل" else "متصل"
+    val bgColor = if (useOfflineMode) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        MaterialTheme.colorScheme.secondaryContainer
+    }
+    val fgColor = if (useOfflineMode) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onSecondaryContainer
+    }
+    Surface(
+        color = bgColor,
+        shape = RoundedCornerShape(999.dp)
+    ) {
+        Text(
+            text = label,
+            color = fgColor,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}
+private fun commonnessStars(difficulty: Int): String {
+    if (difficulty !in 1..5) return ""
+    return buildString(5) {
+        repeat(difficulty) { append('\u2605') }
+        repeat(5 - difficulty) { append('\u2606') }
+    }
+}
+
+@Composable
+private fun CommonnessBadge(
+    difficulty: Int,
+    modifier: Modifier = Modifier
+) {
+    val stars = commonnessStars(difficulty)
+    if (stars.isEmpty()) return
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Text(
+            text = "\u0627\u0644\u0634\u064a\u0648\u0639 $stars",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+    }
+}
+
 private fun formatOfflineSearchPreview(raw: String): String {
     return normalizeMeaningText(raw)
         .replace("\n", " ")
@@ -1268,6 +1464,12 @@ private fun saveRecentSearches(context: android.content.Context, items: List<Str
     prefs.edit().putStringSet(RECENT_SEARCHES_KEY, asSet).apply()
 }
 
+private fun formatEpochAsLocal(epochMs: Long): String {
+    return runCatching {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+            .format(Date(epochMs))
+    }.getOrDefault("-")
+}
 private const val RECENT_SEARCH_PREFS_NAME = "shinjikai_recent_searches"
 private const val RECENT_SEARCHES_KEY = "recent_terms"
 private const val MAX_RECENT_SEARCHES = 15
@@ -1278,6 +1480,11 @@ private const val OFFLINE_DICTIONARY_URL =
 private data class MeaningEntry(
     val definition: String,
     val note: String
+)
+
+private data class RelatedGroupUi(
+    val label: String,
+    val items: List<RelatedWordItem>
 )
 
 private fun formatMeaningEntries(meanings: List<Meaning>?): List<MeaningEntry> {
@@ -1301,6 +1508,7 @@ private fun DetailWordHeaderCard(
     kanji: String,
     kana: String,
     chips: List<String>,
+    onCategoryClick: (String) -> Unit,
     onKanjiClick: () -> Unit
 ) {
     Card(
@@ -1338,13 +1546,31 @@ private fun DetailWordHeaderCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     chips.forEach { chip ->
+                        val isCategoryChip = !chip.startsWith("JLPT")
+                        val chipBgColor = if (isCategoryChip) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        }
+                        val chipTextColor = if (isCategoryChip) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        }
+
                         Surface(
                             shape = RoundedCornerShape(999.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                            color = chipBgColor,
+                            modifier = if (isCategoryChip) {
+                                Modifier.clickable { onCategoryClick(chip) }
+                            } else {
+                                Modifier
+                            }
                         ) {
                             Text(
                                 text = chip,
                                 style = MaterialTheme.typography.labelLarge,
+                                color = chipTextColor,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         }
@@ -1360,6 +1586,9 @@ private fun DefinitionsCard(
     title: String,
     definition: String
 ) {
+    var expanded by remember(definition) { mutableStateOf(false) }
+    val canExpand = definition.length > 260 || definition.count { it == '\n' } >= 4
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -1397,8 +1626,84 @@ private fun DefinitionsCard(
                             textDirection = TextDirection.Rtl
                         ),
                         textAlign = TextAlign.Right,
+                        maxLines = if (expanded) Int.MAX_VALUE else 6,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+                if (canExpand) {
+                    TextButton(
+                        onClick = { expanded = !expanded },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text(if (expanded) "عرض أقل" else "عرض المزيد")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RelatedWordsCard(
+    title: String,
+    groups: List<RelatedGroupUi>,
+    onWordClick: (Int) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                groups.forEach { group ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = group.label,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            group.items.forEach { item ->
+                                val displayText = item.text.ifBlank { item.kana.ifBlank { "Word ${item.wordId}" } }
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    modifier = Modifier.clickable { onWordClick(item.wordId) }
+                                ) {
+                                    Text(
+                                        text = displayText,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1473,3 +1778,25 @@ private fun DetailSectionCard(
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
