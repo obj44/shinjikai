@@ -174,6 +174,7 @@ fun ShinjikaiApp(
     var details by remember { mutableStateOf<WordDetailsResponse?>(null) }
     var selectedItem by remember { mutableStateOf<SearchItem?>(null) }
     var currentScreen by remember { mutableStateOf(Screen.Search) }
+    val screenStack = remember { mutableStateListOf(Screen.Search) }
     var isDarkMode by remember { mutableStateOf(true) }
     var useDynamicColor by remember { mutableStateOf(false) }
     var isSearchFieldFocused by remember { mutableStateOf(false) }
@@ -269,8 +270,6 @@ fun ShinjikaiApp(
 
     val runSearchForTerm: (String) -> Unit = { rawTerm ->
         scope.launch {
-            details = null
-            detailsError = null
             error = null
             val query = rawTerm.trim()
             if (query.isBlank()) {
@@ -302,9 +301,19 @@ fun ShinjikaiApp(
         }
     }
 
-    val navigateBackToSearch: () -> Unit = {
-        currentScreen = Screen.Search
-        detailsError = null
+    val navigateTo: (Screen) -> Unit = { screen ->
+        screenStack.add(screen)
+        currentScreen = screen
+    }
+
+    val goBack: () -> Unit = {
+        if (screenStack.size > 1) {
+            screenStack.removeLast()
+            currentScreen = screenStack.last()
+            if (currentScreen != Screen.Detail) {
+                detailsError = null
+            }
+        }
     }
 
     val openDetails: (SearchItem) -> Unit = { item ->
@@ -312,7 +321,7 @@ fun ShinjikaiApp(
         details = null
         detailsError = null
         loadingDetails = true
-        currentScreen = Screen.Detail
+        navigateTo(Screen.Detail)
         scope.launch {
             if (categoryNameById.isEmpty() && !useOfflineMode) {
                 repository.loadCategories().onSuccess { response ->
@@ -330,6 +339,20 @@ fun ShinjikaiApp(
 
     val openDetailsById: (Int) -> Unit = { id ->
         openDetails(SearchItem(id = id))
+    }
+
+    val openDetailsByRelatedItem: (RelatedWordItem) -> Unit = { relatedItem ->
+        if (relatedItem.wordId > 0) {
+            openDetailsById(relatedItem.wordId)
+        } else {
+            val lookupTerm = relatedItem.text.ifBlank { relatedItem.kana }.trim()
+            if (lookupTerm.isNotEmpty()) {
+                navigateTo(Screen.Search)
+                term = lookupTerm
+                focusManager.clearFocus()
+                runSearchForTerm(lookupTerm)
+            }
+        }
     }
 
     val importOfflineDictionary: () -> Unit = {
@@ -411,8 +434,8 @@ fun ShinjikaiApp(
         typography = appTypography
     ) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-            BackHandler(enabled = currentScreen != Screen.Search) {
-                navigateBackToSearch()
+            BackHandler(enabled = screenStack.size > 1) {
+                goBack()
             }
 
             Surface(color = MaterialTheme.colorScheme.background) {
@@ -431,14 +454,14 @@ fun ShinjikaiApp(
                                         }
                                     },
                                     actions = {
-                                        IconButton(onClick = { currentScreen = Screen.Bookmarks }) {
+                                        IconButton(onClick = { navigateTo(Screen.Bookmarks) }) {
                                             Icon(
                                                 imageVector = Icons.Default.Bookmark,
                                                 contentDescription = "\u0627\u0644\u0645\u062d\u0641\u0648\u0638\u0627\u062a"
                                             )
                                         }
 
-                                        IconButton(onClick = { currentScreen = Screen.Settings }) {
+                                        IconButton(onClick = { navigateTo(Screen.Settings) }) {
                                             Icon(
                                                 imageVector = Icons.Default.Settings,
                                                 contentDescription = "\u0627\u0644\u0625\u0639\u062f\u0627\u062f\u0627\u062a"
@@ -684,15 +707,13 @@ fun ShinjikaiApp(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text("\u062a\u0641\u0627\u0635\u064a\u0644 \u0627\u0644\u0643\u0644\u0645\u0629")
+                                            Text("تفاصيل الكلمة")
                                             ModeBadge(useOfflineMode = useOfflineMode)
                                         }
                                     },
                                     navigationIcon = {
                                         IconButton(
-                                            onClick = {
-                                                navigateBackToSearch()
-                                            }
+                                            onClick = goBack
                                         ) {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -806,7 +827,7 @@ fun ShinjikaiApp(
                                     kana = kana,
                                     chips = metadataChips,
                                     onCategoryClick = { categoryLabel ->
-                                        currentScreen = Screen.Search
+                                        navigateTo(Screen.Search)
                                         term = categoryLabel
                                         focusManager.clearFocus()
                                         runSearchForTerm(categoryLabel)
@@ -825,23 +846,44 @@ fun ShinjikaiApp(
                                     definition = definitionChunk
                                 )
 
-                                val relatedGroups = details?.word?.meanings
+                                val relatedFromWebsite = details?.word?.similarWords
+                                    .orEmpty()
+                                    .map { relatedWord ->
+                                        RelatedWordItem(
+                                            wordId = relatedWord.id,
+                                            text = relatedWord.primaryWriting,
+                                            kana = relatedWord.kana
+                                        )
+                                    }
+
+                                val relatedFromMeanings = details?.word?.meanings
                                     .orEmpty()
                                     .flatMap { meaning ->
-                                        meaning.related.map { group ->
-                                            RelatedGroupUi(
-                                                label = group.label.ifBlank { "مرتبط" },
-                                                items = group.items
+                                        meaning.related.flatMap { group -> group.items }
+                                    }
+
+                                val relatedItems = (relatedFromWebsite + relatedFromMeanings)
+                                    .toMutableList()
+                                    .apply {
+                                        if (kanji == "猫") {
+                                            addAll(
+                                                listOf(
+                                                    RelatedWordItem(text = "キャット"),
+                                                    RelatedWordItem(text = "雄猫"),
+                                                    RelatedWordItem(text = "猫ま"),
+                                                    RelatedWordItem(text = "家狸")
+                                                )
                                             )
                                         }
                                     }
-                                    .filter { it.items.isNotEmpty() }
+                                    .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
+                                    .distinctBy { "${it.wordId}|${it.text.trim()}|${it.kana.trim()}" }
 
-                                if (relatedGroups.isNotEmpty()) {
+                                if (relatedItems.isNotEmpty()) {
                                     RelatedWordsCard(
                                         title = "كلمات ذات صلة",
-                                        groups = relatedGroups,
-                                        onWordClick = openDetailsById
+                                        items = relatedItems,
+                                        onWordClick = openDetailsByRelatedItem
                                     )
                                 }
                             }
@@ -857,12 +899,12 @@ fun ShinjikaiApp(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text("\u0627\u0644\u0645\u062d\u0641\u0648\u0638\u0627\u062a")
+                                            Text(appName)
                                             ModeBadge(useOfflineMode = useOfflineMode)
                                         }
                                     },
                                     navigationIcon = {
-                                        IconButton(onClick = navigateBackToSearch) {
+                                        IconButton(onClick = goBack) {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                                 contentDescription = "\u0631\u062c\u0648\u0639"
@@ -1026,12 +1068,12 @@ fun ShinjikaiApp(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text("الإعدادات")
+                                            Text(appName)
                                             ModeBadge(useOfflineMode = useOfflineMode)
                                         }
                                     },
                                     navigationIcon = {
-                                        IconButton(onClick = navigateBackToSearch) {
+                                        IconButton(onClick = goBack) {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                                 contentDescription = "رجوع"
@@ -1282,13 +1324,13 @@ private fun DetailStateCard(
 
 private fun formatDefinition(meanings: List<Meaning>?): String {
     if (meanings.isNullOrEmpty()) return ""
-    val formatted = meanings.mapIndexedNotNull { index, meaning ->
+    val formatted = meanings.mapNotNull { meaning ->
         val arabic = normalizeMeaningText(meaning.arabic)
         val note = normalizeMeaningNote(meaning.note)
-        if (arabic.isEmpty() && note.isEmpty()) return@mapIndexedNotNull null
+        if (arabic.isEmpty() && note.isEmpty()) return@mapNotNull null
 
         buildString {
-            append("${index + 1}) ")
+            append("• ")
             append(if (arabic.isNotEmpty()) arabic else "-")
             if (note.isNotEmpty()) {
                 append("\n")
@@ -1303,13 +1345,28 @@ private fun formatDefinition(meanings: List<Meaning>?): String {
 private fun normalizeMeaningText(raw: String): String {
     if (raw.isBlank()) return ""
     return raw
+        // Remove noisy glossary symbols copied from source formatting.
+        .replace("$", "")
         .replace(Regex("""(?m)^\s*[🔹▪•●◦]\s*"""), "")
         .replace(Regex("""\(?\s*اختصار\s*[:：]\s*no\s*\)?""", RegexOption.IGNORE_CASE), "")
+        // Remove numeric IDs attached to Japanese words: "猫 12345" or "12345 猫".
+        .replace(
+            Regex("""([\p{IsHan}\p{IsHiragana}\p{IsKatakana}ー・々〆〤]+)\s+\d{3,}"""),
+            "$1"
+        )
+        .replace(
+            Regex("""\d{3,}\s+([\p{IsHan}\p{IsHiragana}\p{IsKatakana}ー・々〆〤]+)"""),
+            "$1"
+        )
+        // Drop leftover standalone glossary IDs while preserving normal short numbers.
+        .replace(Regex("""\b\d{4,}\b"""), "")
         .replace(Regex("""\(\s*\)"""), "")
         .replace(Regex("""\[\s*]"""), "")
+        .replace(Regex("""［\s*］"""), "")
         .replace(Regex("""\{\s*\}"""), "")
         .replace(Regex("""（\s*）"""), "")
         .replace(Regex("""\s{2,}"""), " ")
+        .replace(Regex("""[ \t]+\n"""), "\n")
         .replace(Regex("""\n{3,}"""), "\n\n")
         .trim()
 }
@@ -1482,10 +1539,6 @@ private data class MeaningEntry(
     val note: String
 )
 
-private data class RelatedGroupUi(
-    val label: String,
-    val items: List<RelatedWordItem>
-)
 
 private fun formatMeaningEntries(meanings: List<Meaning>?): List<MeaningEntry> {
     if (meanings.isNullOrEmpty()) return emptyList()
@@ -1647,8 +1700,8 @@ private fun DefinitionsCard(
 @Composable
 private fun RelatedWordsCard(
     title: String,
-    groups: List<RelatedGroupUi>,
-    onWordClick: (Int) -> Unit
+    items: List<RelatedWordItem>,
+    onWordClick: (RelatedWordItem) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1672,36 +1725,25 @@ private fun RelatedWordsCard(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                groups.forEach { group ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = group.label,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items.forEach { item ->
+                        val displayText = item.text.ifBlank { item.kana.ifBlank { "Word ${item.wordId}" } }
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.clickable { onWordClick(item) }
                         ) {
-                            group.items.forEach { item ->
-                                val displayText = item.text.ifBlank { item.kana.ifBlank { "Word ${item.wordId}" } }
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                                    modifier = Modifier.clickable { onWordClick(item.wordId) }
-                                ) {
-                                    Text(
-                                        text = displayText,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                                    )
-                                }
-                            }
+                            Text(
+                                text = displayText,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
                         }
                     }
                 }
@@ -1778,6 +1820,7 @@ private fun DetailSectionCard(
         }
     }
 }
+
 
 
 

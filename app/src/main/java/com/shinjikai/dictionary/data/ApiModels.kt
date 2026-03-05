@@ -50,8 +50,18 @@ data class WordDetailsWord(
     @SerializedName("Meanings") val meanings: List<Meaning> = emptyList(),
     @SerializedName("JLPT") val jlpt: Int = 0,
     @SerializedName("Difficulty") val difficulty: Int = 0,
-    @SerializedName("CategoryIds") val categoryIds: List<Int> = emptyList()
+    @SerializedName("CategoryIds") val categoryIds: List<Int> = emptyList(),
+    @SerializedName("SimilarWords") val similarWords: List<WordRef> = emptyList()
 )
+
+data class WordRef(
+    @SerializedName("Id") val id: Int = 0,
+    @SerializedName("Kana") val kana: String = "",
+    @SerializedName("Writings") val writings: List<Writing> = emptyList()
+) {
+    val primaryWriting: String
+        get() = writings.firstOrNull()?.text.orEmpty()
+}
 
 data class Meaning(
     @SerializedName("Arabic") val arabic: String = "",
@@ -91,3 +101,4 @@ data class LoadCategoryResponse(
     @SerializedName("Category") val category: CategoryRef = CategoryRef(),
     @SerializedName("Members") val members: SearchWordsResponse = SearchWordsResponse()
 )
+
