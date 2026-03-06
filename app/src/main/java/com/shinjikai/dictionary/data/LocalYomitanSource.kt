@@ -3,9 +3,19 @@ package com.shinjikai.dictionary.data
 class LocalYomitanSource(
     private val yomitanDao: YomitanDao
 ) : DictionarySource {
-    override suspend fun searchWords(term: String): Result<SearchWordsResponse> {
+    override suspend fun searchWords(term: String, page: Int): Result<SearchWordsResponse> {
         val query = term.trim()
         if (query.isBlank()) return Result.success(SearchWordsResponse(items = emptyList()))
+        if (page > 0) {
+            return Result.success(
+                SearchWordsResponse(
+                    items = emptyList(),
+                    page = page,
+                    pageCount = 1,
+                    totalCount = 0
+                )
+            )
+        }
         return runCatching {
             val rows = if (isArabicQuery(query)) {
                 val normalizedQuery = normalizeArabic(query)

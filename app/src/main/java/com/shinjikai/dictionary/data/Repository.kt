@@ -1,4 +1,4 @@
-﻿package com.shinjikai.dictionary.data
+package com.shinjikai.dictionary.data
 
 import android.util.Base64
 import okhttp3.Cache
@@ -11,7 +11,7 @@ import java.util.Locale
 import kotlin.random.Random
 
 interface DictionarySource {
-    suspend fun searchWords(term: String): Result<SearchWordsResponse>
+    suspend fun searchWords(term: String, page: Int = 0): Result<SearchWordsResponse>
     suspend fun loadWordDetails(id: Int): Result<WordDetailsResponse>
     suspend fun loadCategories(): Result<LoadCategoriesResponse>
     suspend fun loadCategory(id: Int, page: Int = 0): Result<LoadCategoryResponse>
@@ -20,8 +20,8 @@ interface DictionarySource {
 class ShinjikaiRepository(
     private val source: DictionarySource = RemoteDictionarySource()
 ) {
-    suspend fun searchWords(term: String): Result<SearchWordsResponse> {
-        return source.searchWords(term)
+    suspend fun searchWords(term: String, page: Int = 0): Result<SearchWordsResponse> {
+        return source.searchWords(term = term, page = page)
     }
 
     suspend fun loadWordDetails(id: Int): Result<WordDetailsResponse> {
@@ -55,6 +55,12 @@ class RemoteDictionarySource(
     }
     @Volatile
     private var categoriesCache: LoadCategoriesResponse? = null
+    private val categoryMembersCacheLock = Any()
+    private val categoryMembersCache = object : LinkedHashMap<String, LoadCategoryResponse>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LoadCategoryResponse>?): Boolean {
+            return size > CATEGORY_MEMBERS_CACHE_LIMIT
+        }
+    }
 
     init {
         val clientId = makeClientId()
@@ -83,17 +89,18 @@ class RemoteDictionarySource(
         api = retrofit.create(ShinjikaiApi::class.java)
     }
 
-    override suspend fun searchWords(term: String): Result<SearchWordsResponse> {
+    override suspend fun searchWords(term: String, page: Int): Result<SearchWordsResponse> {
         val normalizedTerm = term.trim().lowercase(Locale.ROOT)
+        val cacheKey = "${normalizedTerm}:${page}"
         synchronized(searchCacheLock) {
-            searchCache[normalizedTerm]?.let { return Result.success(it) }
+            searchCache[cacheKey]?.let { return Result.success(it) }
         }
 
         return runCatching {
-            api.searchWords(SearchWordsRequest(term = term))
+            api.searchWords(SearchWordsRequest(term = term, page = page))
         }.onSuccess { response ->
             synchronized(searchCacheLock) {
-                searchCache[normalizedTerm] = response
+                searchCache[cacheKey] = response
             }
         }
     }
@@ -122,8 +129,17 @@ class RemoteDictionarySource(
     }
 
     override suspend fun loadCategory(id: Int, page: Int): Result<LoadCategoryResponse> {
+        val cacheKey = "${id}:${page}"
+        synchronized(categoryMembersCacheLock) {
+            categoryMembersCache[cacheKey]?.let { return Result.success(it) }
+        }
+
         return runCatching {
             api.loadCategory(CategoryRequest(id = id, page = page))
+        }.onSuccess { response ->
+            synchronized(categoryMembersCacheLock) {
+                categoryMembersCache[cacheKey] = response
+            }
         }
     }
 
@@ -136,6 +152,11 @@ class RemoteDictionarySource(
     private companion object {
         const val SEARCH_CACHE_LIMIT = 120
         const val DETAILS_CACHE_LIMIT = 400
+        const val CATEGORY_MEMBERS_CACHE_LIMIT = 120
         const val HTTP_CACHE_MAX_BYTES = 40L * 1024L * 1024L
     }
 }
+
+
+
+

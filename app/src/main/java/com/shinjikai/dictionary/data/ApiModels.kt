@@ -40,7 +40,8 @@ data class IdRequest(
 )
 
 data class WordDetailsResponse(
-    @SerializedName("Word") val word: WordDetailsWord
+    @SerializedName("Word") val word: WordDetailsWord,
+    @SerializedName("SimilarWords") val similarWords: List<WordRef> = emptyList()
 )
 
 data class WordDetailsWord(
@@ -50,8 +51,7 @@ data class WordDetailsWord(
     @SerializedName("Meanings") val meanings: List<Meaning> = emptyList(),
     @SerializedName("JLPT") val jlpt: Int = 0,
     @SerializedName("Difficulty") val difficulty: Int = 0,
-    @SerializedName("CategoryIds") val categoryIds: List<Int> = emptyList(),
-    @SerializedName("SimilarWords") val similarWords: List<WordRef> = emptyList()
+    @SerializedName("CategoryIds") val categoryIds: List<Int> = emptyList()
 )
 
 data class WordRef(
