@@ -1,1 +1,1 @@
-Japanese to Arabic dictionary with online search, bookmarks, and optional offline import.
+Japanese-Arabic dictionary with bookmarks and optional offline import.
