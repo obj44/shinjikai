@@ -1951,7 +1951,7 @@ private fun RelatedWordsCard(
                         },
                         modifier = Modifier.align(Alignment.End)
                     ) {
-                        Text("Load more")
+                        Text("\u0639\u0631\u0636 \u0627\u0644\u0645\u0632\u064a\u062f")
                     }
                 }
             }
@@ -2027,6 +2027,7 @@ private fun DetailSectionCard(
         }
     }
 }
+
 
 
 

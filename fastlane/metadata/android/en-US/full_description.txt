@@ -1,0 +1,17 @@
+Shinjikai Dictionary is a Japanese to Arabic dictionary app built with Kotlin and Jetpack Compose.
+
+Features:
+
+- Search Japanese and Arabic terms
+- View kana, kanji, JLPT level, and Arabic meanings
+- Browse related words when available
+- Save bookmarks
+- Keep recent searches
+- Use the public Shinjikai API in online mode
+- Import a local Yomitan-compatible dictionary for optional offline mode
+
+Notes:
+
+- Internet access is required for online mode.
+- Offline mode is optional and depends on importing dictionary data separately.
+- Dictionary content and API service are provided by the Shinjikai project and external data sources referenced by the app.

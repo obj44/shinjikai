@@ -1,0 +1,1 @@
+Add at least two phone screenshots here before submitting to F-Droid.

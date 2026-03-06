@@ -1,0 +1,5 @@
+Version 1.1
+
+- Improved Arabic localization in the UI
+- Added category browsing and pagination improvements
+- Kept online search, bookmarks, recent searches, and optional offline import
