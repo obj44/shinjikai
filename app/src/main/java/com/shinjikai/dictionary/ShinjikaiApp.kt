@@ -96,6 +96,7 @@ import androidx.compose.material3.Typography
 import com.shinjikai.dictionary.data.Meaning
 import com.shinjikai.dictionary.data.RelatedWordItem
 import com.shinjikai.dictionary.data.SearchItem
+import com.shinjikai.dictionary.data.SentenceExample
 import com.shinjikai.dictionary.data.ShinjikaiRepository
 import com.shinjikai.dictionary.data.WordDetailsResponse
 import com.shinjikai.dictionary.data.AppDatabase
@@ -353,6 +354,22 @@ fun ShinjikaiApp(
         }
     }
 
+
+    val clearCategorySearch: () -> Unit = {
+        activeCategoryId = null
+        activeCategoryName = null
+        resultHeader = null
+        resultMode = ResultMode.None
+        activeResultQuery = ""
+        currentResultsPage = 0
+        currentResultsPageCount = 0
+        currentResultsTotalCount = 0
+        loadingMore = false
+        term = ""
+        results = emptyList()
+        error = null
+        focusManager.clearFocus()
+    }
     LaunchedEffect(externalSearchTerm) {
         val incoming = externalSearchTerm?.trim().orEmpty()
         if (incoming.isNotBlank()) {
@@ -573,48 +590,49 @@ fun ShinjikaiApp(
                                     .padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    OutlinedTextField(
-                                        value = term,
-                                        onValueChange = {
-                                            term = it
-                                            if (activeCategoryId != null) {
-                                                activeCategoryId = null
-                                                activeCategoryName = null
-                                                resultHeader = null
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .onFocusChanged { state ->
-                                                isSearchFieldFocused = state.isFocused
-                                            },
-                                        singleLine = true,
-                                        label = { Text("\u0627\u0643\u062a\u0628 \u0628\u0627\u0644\u064a\u0627\u0628\u0627\u0646\u064a\u0629 \u0623\u0648 \u0627\u0644\u0639\u0631\u0628\u064a\u0629 \u0623\u0648 \u0628\u0627\u0644\u0631\u0648\u0645\u0627\u062c\u064a") },
-                                        shape = RoundedCornerShape(20.dp),
-                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                        keyboardActions = KeyboardActions(onSearch = { runSearch() }),
-                                        trailingIcon = {
-                                            IconButton(
-                                                onClick = {
-                                                    focusManager.clearFocus()
-                                                    runSearch()
-                                                }
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Search,
-                                                    contentDescription = "\u0628\u062d\u062b"
-                                                )
-                                            }
-                                        },                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
-                                        )
+                                if (activeCategoryName != null) {
+                                    CategorySearchBanner(
+                                        label = activeCategoryName.orEmpty(),
+                                        onClear = clearCategorySearch
                                     )
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedTextField(
+                                            value = term,
+                                            onValueChange = { term = it },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .onFocusChanged { state ->
+                                                    isSearchFieldFocused = state.isFocused
+                                                },
+                                            singleLine = true,
+                                            label = { Text("\u0627\u0643\u062a\u0628 \u0628\u0627\u0644\u064a\u0627\u0628\u0627\u0646\u064a\u0629 \u0623\u0648 \u0627\u0644\u0639\u0631\u0628\u064a\u0629 \u0623\u0648 \u0628\u0627\u0644\u0631\u0648\u0645\u0627\u062c\u064a") },
+                                            shape = RoundedCornerShape(20.dp),
+                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                            keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+                                            trailingIcon = {
+                                                IconButton(
+                                                    onClick = {
+                                                        focusManager.clearFocus()
+                                                        runSearch()
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Search,
+                                                        contentDescription = "\u0628\u062d\u062b"
+                                                    )
+                                                }
+                                            },
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                        )
+                                    }
                                 }
 
                                 val historyItems = if (term.isBlank()) {
@@ -695,21 +713,6 @@ fun ShinjikaiApp(
 
                                 error?.let {
                                     Text(text = it, color = MaterialTheme.colorScheme.error)
-                                }
-
-                                activeCategoryName?.let { categoryName ->
-                                    CategorySearchBanner(
-                                        label = categoryName,
-
-                                        onClear = {
-                                            activeCategoryId = null
-                                            activeCategoryName = null
-                                            resultHeader = null
-                                            term = ""
-                                            results = emptyList()
-                                            error = null
-                                        }
-                                    )
                                 }
 
                                 val showLanding = term.isBlank() && results.isEmpty() && error == null && !loading
@@ -947,6 +950,10 @@ fun ShinjikaiApp(
                                 val jlptLevel = details?.word?.jlpt
                                     ?.takeIf { it in 1..5 }
                                     ?: item.jlpt.takeIf { it in 1..5 }
+                                val commonnessLevel = details?.word?.difficulty
+                                    ?.takeIf { it in 1..5 }
+                                    ?: item.difficulty.takeIf { it in 1..5 }
+
 
                                 val categoryChips = details?.word?.categoryIds
                                     .orEmpty()
@@ -958,6 +965,7 @@ fun ShinjikaiApp(
                                     .distinctBy { it.id }
                                 val metadataChips = buildList {
                                     jlptLevel?.let { add(CategoryChipModel(id = -it, label = "JLPT N$it")) }
+                                    commonnessLevel?.let { add(CategoryChipModel(id = -(100 + it), label = "\u0627\u0644\u0634\u064a\u0648\u0639 ${commonnessStars(it)}")) }
                                     addAll(categoryChips)
                                 }
 
@@ -1024,8 +1032,20 @@ fun ShinjikaiApp(
                                         onWordClick = openDetailsByRelatedItem
                                     )
                                 }
-                            }
+
+                                val sentenceExamples = details?.sentenceSearch
+                                    .orEmpty()
+                                    .filter { it.text.isNotBlank() || it.kana.isNotBlank() || it.arabic.isNotBlank() }
+                                    .distinctBy { "${it.id}|${it.text.trim()}|${it.kana.trim()}|${it.arabic.trim()}" }
+
+                                if (sentenceExamples.isNotEmpty()) {
+                                    ExamplesCard(
+                                        title = "\u0627\u0644\u0623\u0645\u062b\u0644\u0629",
+                                        items = sentenceExamples
+                                    )
+                                }
                         }
+                            }
                     }
 
                     Screen.Bookmarks -> {
@@ -1959,6 +1979,87 @@ private fun RelatedWordsCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ExamplesCard(
+    title: String,
+    items: List<SentenceExample>
+) {
+    var expanded by remember(items) { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = if (expanded) "\u0637\u064a \u0627\u0644\u0628\u0637\u0627\u0642\u0629" else "\u0639\u0631\u0636 ${items.size}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            if (expanded) {
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items.forEach { item ->
+                        val displayText = item.text.ifBlank { item.kana.ifBlank { "\u0645\u062b\u0627\u0644" } }
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Text(
+                                    text = displayText,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
+                            if (item.arabic.isNotBlank()) {
+                                Text(
+                                    text = forceRtlText(item.arabic),
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        textDirection = TextDirection.Rtl
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 @Composable
 private fun DetailSectionCard(
     title: String,
@@ -2027,6 +2128,11 @@ private fun DetailSectionCard(
         }
     }
 }
+
+
+
+
+
 
 
 

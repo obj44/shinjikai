@@ -41,7 +41,8 @@ data class IdRequest(
 
 data class WordDetailsResponse(
     @SerializedName("Word") val word: WordDetailsWord,
-    @SerializedName("SimilarWords") val similarWords: List<WordRef> = emptyList()
+    @SerializedName("SimilarWords") val similarWords: List<WordRef> = emptyList(),
+    @SerializedName("SentenceSearch") val sentenceSearch: List<SentenceExample> = emptyList()
 )
 
 data class WordDetailsWord(
@@ -88,6 +89,13 @@ data class RelatedWordItem(
     @SerializedName("MeaningNo") val meaningNo: Int = 0
 )
 
+data class SentenceExample(
+    @SerializedName("Id") val id: Int = 0,
+    @SerializedName("Text") val text: String = "",
+    @SerializedName("Kana") val kana: String = "",
+    @SerializedName("Arabic") val arabic: String = ""
+)
+
 data class LoadCategoriesResponse(
     @SerializedName("Categories") val categories: List<CategoryRef> = emptyList()
 )
@@ -101,4 +109,3 @@ data class LoadCategoryResponse(
     @SerializedName("Category") val category: CategoryRef = CategoryRef(),
     @SerializedName("Members") val members: SearchWordsResponse = SearchWordsResponse()
 )
-
