@@ -1,7 +1,6 @@
 package com.shinjikai.dictionary
 
 import android.content.Context
-import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -139,8 +138,7 @@ fun DetailScreenBody(
     modifier: Modifier = Modifier,
     useOfflineMode: Boolean,
     detailState: DetailUiState,
-    canSpeakJapanese: Boolean,
-    textToSpeech: TextToSpeech?,
+    onSpeakJapaneseText: (text: String, utteranceId: String, unavailableMessage: String) -> Unit,
     context: Context,
     clipboardManager: ClipboardManager,
     focusManager: androidx.compose.ui.focus.FocusManager,
@@ -247,13 +245,10 @@ fun DetailScreenBody(
                 val speakText = kana.trim().takeIf { it.isNotEmpty() && it != "-" }
                 when {
                     speakText == null -> Toast.makeText(context, noReadingMessage, Toast.LENGTH_SHORT).show()
-                    !canSpeakJapanese || textToSpeech == null ->
-                        Toast.makeText(context, japaneseAudioUnavailableMessage, Toast.LENGTH_SHORT).show()
-                    else -> textToSpeech.speak(
+                    else -> onSpeakJapaneseText(
                         speakText,
-                        TextToSpeech.QUEUE_FLUSH,
-                        null,
-                        "word-kana-${item.id}"
+                        "word-kana-${item.id}",
+                        japaneseAudioUnavailableMessage
                     )
                 }
             },

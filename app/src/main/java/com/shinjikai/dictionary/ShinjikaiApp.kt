@@ -56,7 +56,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -99,7 +98,6 @@ import com.shinjikai.dictionary.ui.ShinjikaiViewModel
 import com.shinjikai.dictionary.ui.buildDetailRoute
 import com.shinjikai.dictionary.ui.buildSearchRoute
 import com.shinjikai.dictionary.ui.toScreen
-import java.util.Locale
 import kotlinx.coroutines.launch
 
 @Composable
@@ -143,36 +141,7 @@ fun ShinjikaiApp(
             viewModel.importOfflineDictionaryFromUri(uri)
         }
     }
-
-    var textToSpeech by remember(context) { mutableStateOf<TextToSpeech?>(null) }
-    var canSpeakJapanese by remember { mutableStateOf(false) }
-
-    DisposableEffect(context) {
-        var disposed = false
-        var localTts: TextToSpeech? = null
-        val instance = TextToSpeech(context) { status ->
-            if (disposed) return@TextToSpeech
-            val ready = localTts ?: return@TextToSpeech
-            if (status == TextToSpeech.SUCCESS) {
-                val result = ready.setLanguage(Locale.JAPANESE)
-                canSpeakJapanese = result != TextToSpeech.LANG_MISSING_DATA &&
-                    result != TextToSpeech.LANG_NOT_SUPPORTED
-            } else {
-                canSpeakJapanese = false
-            }
-        }
-        localTts = instance
-        instance.setSpeechRate(0.92f)
-        instance.setPitch(1f)
-        textToSpeech = instance
-        onDispose {
-            disposed = true
-            canSpeakJapanese = false
-            textToSpeech?.stop()
-            textToSpeech?.shutdown()
-            textToSpeech = null
-        }
-    }
+    val japaneseTextToSpeech = rememberJapaneseTextToSpeechController()
 
     LaunchedEffect(currentScreen) {
         if (currentScreen == Screen.Settings) viewModel.refreshOfflineTermCount()
@@ -425,9 +394,21 @@ fun ShinjikaiApp(
                             }
                             DetailScreenContent(
                                 useOfflineMode = settings.useOfflineMode,
-                                canSpeakJapanese = canSpeakJapanese,
-                                textToSpeech = textToSpeech,
                                 selectedAnkiDeckName = settings.selectedAnkiDeckName,
+                                loadJapaneseTextToSpeech = japaneseTextToSpeech::await,
+                                onSpeakJapaneseText = { text, utteranceId, unavailableMessage ->
+                                    japaneseTextToSpeech.speak(
+                                        text = text,
+                                        utteranceId = utteranceId,
+                                        onUnavailable = {
+                                            Toast.makeText(
+                                                context,
+                                                unavailableMessage,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    )
+                                },
                                 clipboardManager = clipboardManager,
                                 focusManager = focusManager,
                                 viewModel = viewModel,
@@ -684,9 +665,9 @@ private data class OnboardingPage(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun DetailScreenContent(
     useOfflineMode: Boolean,
-    canSpeakJapanese: Boolean,
-    textToSpeech: TextToSpeech?,
     selectedAnkiDeckName: String,
+    loadJapaneseTextToSpeech: suspend () -> TextToSpeech?,
+    onSpeakJapaneseText: (text: String, utteranceId: String, unavailableMessage: String) -> Unit,
     clipboardManager: androidx.compose.ui.platform.ClipboardManager,
     focusManager: androidx.compose.ui.focus.FocusManager,
     viewModel: ShinjikaiViewModel,
@@ -741,12 +722,21 @@ private fun DetailScreenContent(
     fun launchAnkiExport(note: AnkiNoteContent, selectedItemId: Int?) {
         coroutineScope.launch {
             isAddingToAnki = true
+            val textToSpeech = if (
+                note.speechText.isNotBlank() &&
+                AnkiExporter.canRequestDirectAdd(context) &&
+                AnkiExporter.hasDatabasePermission(context)
+            ) {
+                loadJapaneseTextToSpeech()
+            } else {
+                null
+            }
             val result = AnkiExporter.addNote(
                 context = context,
                 note = note,
                 deckName = selectedAnkiDeckName,
                 textToSpeech = textToSpeech,
-                canSpeakJapanese = canSpeakJapanese
+                canSpeakJapanese = textToSpeech != null
             )
             isAddingToAnki = false
             handleAnkiResult(result, selectedItemId)
@@ -855,8 +845,7 @@ private fun DetailScreenContent(
                 .verticalScroll(rememberScrollState()),
             useOfflineMode = useOfflineMode,
             detailState = detailState,
-            canSpeakJapanese = canSpeakJapanese,
-            textToSpeech = textToSpeech,
+            onSpeakJapaneseText = onSpeakJapaneseText,
             context = context,
             clipboardManager = clipboardManager,
             focusManager = focusManager,
