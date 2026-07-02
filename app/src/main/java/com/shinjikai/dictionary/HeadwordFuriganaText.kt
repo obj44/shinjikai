@@ -2,25 +2,16 @@ package com.shinjikai.dictionary
 
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.Placeable
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import com.shinjikai.dictionary.data.WritingPart
-import kotlin.math.max
 
 @Composable
 internal fun HeadwordFuriganaText(
@@ -48,7 +39,7 @@ internal fun HeadwordFuriganaText(
         Text(
             text = cleanText,
             modifier = modifier,
-            style = baseStyle.tightRubyStyle().copy(textDirection = TextDirection.ContentOrLtr),
+            style = baseStyle.withoutFontPadding().copy(textDirection = TextDirection.ContentOrLtr),
             color = baseColor,
             textAlign = textAlign,
             maxLines = 2,
@@ -57,156 +48,25 @@ internal fun HeadwordFuriganaText(
         return
     }
 
-    FuriganaLayout(
-        segments = segments,
+    val layoutSegments = remember(segments) {
+        segments.map { segment ->
+            RubyTextSegment(base = segment.base, ruby = segment.ruby)
+        }
+    }
+    RubyTextLayout(
+        segments = layoutSegments,
         modifier = modifier.fillMaxWidth(),
-        baseStyle = baseStyle.tightRubyStyle().copy(textDirection = TextDirection.ContentOrLtr),
-        rubyStyle = rubyStyle.tightRubyStyle().copy(textDirection = TextDirection.ContentOrLtr),
-        baseColor = baseColor,
-        rubyColor = rubyColor,
+        baseStyle = baseStyle.copy(textDirection = TextDirection.ContentOrLtr),
+        rubyStyle = rubyStyle.copy(textDirection = TextDirection.ContentOrLtr),
+        baseColor = { baseColor },
+        rubyColor = { rubyColor },
         textAlign = textAlign
     )
 }
 
-@Composable
-private fun FuriganaLayout(
-    segments: List<HeadwordRubySegment>,
-    modifier: Modifier,
-    baseStyle: TextStyle,
-    rubyStyle: TextStyle,
-    baseColor: Color,
-    rubyColor: Color,
-    textAlign: TextAlign
-) {
-    val rowGapPx = with(LocalDensity.current) { 5.dp.roundToPx() }
-    val maxRubyOverlapPx = with(LocalDensity.current) { 24.dp.roundToPx() }
-
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Layout(
-            modifier = modifier,
-            content = {
-                segments.forEach { segment ->
-                    Text(
-                        text = segment.ruby.orEmpty(),
-                        style = rubyStyle,
-                        color = rubyColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Visible
-                    )
-                    Text(
-                        text = segment.base,
-                        style = baseStyle,
-                        color = baseColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Visible
-                    )
-                }
-            }
-        ) { measurables, constraints ->
-            val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
-            val measured = segments.mapIndexed { index, segment ->
-                val ruby = measurables[index * 2].measure(looseConstraints)
-                val base = measurables[index * 2 + 1].measure(looseConstraints)
-                FuriganaMeasuredSegment(
-                    segment = segment,
-                    ruby = ruby,
-                    base = base,
-                    hasRuby = !segment.ruby.isNullOrBlank(),
-                    width = max(ruby.width, base.width)
-                )
-            }
-
-            val availableWidth = if (constraints.hasBoundedWidth) {
-                constraints.maxWidth
-            } else {
-                measured.sumOf { it.width }.coerceAtLeast(constraints.minWidth)
-            }.coerceAtLeast(1)
-
-            val rows = mutableListOf<List<FuriganaMeasuredSegment>>()
-            var currentRow = mutableListOf<FuriganaMeasuredSegment>()
-            var currentWidth = 0
-            measured.forEach { item ->
-                if (currentRow.isNotEmpty() && currentWidth + item.width > availableWidth) {
-                    rows += currentRow
-                    currentRow = mutableListOf()
-                    currentWidth = 0
-                }
-                currentRow += item
-                currentWidth += item.width
-            }
-            if (currentRow.isNotEmpty()) rows += currentRow
-
-            data class PlacedItem(
-                val item: FuriganaMeasuredSegment,
-                val x: Int,
-                val rowY: Int,
-                val rubyLaneHeight: Int,
-                val rubyBlockHeight: Int
-            )
-
-            val placed = mutableListOf<PlacedItem>()
-            var measuredHeight = 0
-            rows.forEachIndexed { rowIndex, row ->
-                val rowWidth = row.sumOf { it.width }
-                var x = when (textAlign) {
-                    TextAlign.Center -> (availableWidth - rowWidth) / 2
-                    TextAlign.Right, TextAlign.End -> availableWidth - rowWidth
-                    else -> 0
-                }.coerceAtLeast(0)
-                val rubyLaneHeight = row.maxOfOrNull { if (it.hasRuby) it.ruby.height else 0 } ?: 0
-                val baseLaneHeight = row.maxOfOrNull { it.base.height } ?: 0
-                val rubyOverlap = ((rubyLaneHeight * 92) / 100).coerceAtMost(maxRubyOverlapPx)
-                val rubyBlockHeight = (rubyLaneHeight - rubyOverlap).coerceAtLeast(0)
-                row.forEach { item ->
-                    placed += PlacedItem(
-                        item = item,
-                        x = x,
-                        rowY = measuredHeight,
-                        rubyLaneHeight = rubyLaneHeight,
-                        rubyBlockHeight = rubyBlockHeight
-                    )
-                    x += item.width
-                }
-                measuredHeight += rubyBlockHeight + baseLaneHeight
-                if (rowIndex != rows.lastIndex) measuredHeight += rowGapPx
-            }
-
-            val layoutWidth = if (constraints.hasBoundedWidth) {
-                constraints.maxWidth
-            } else {
-                rows.maxOfOrNull { row -> row.sumOf { it.width } } ?: 0
-            }.coerceIn(constraints.minWidth, constraints.maxWidth)
-            val layoutHeight = measuredHeight.coerceIn(constraints.minHeight, constraints.maxHeight)
-
-            layout(layoutWidth, layoutHeight) {
-                placed.forEach { placedItem ->
-                    val item = placedItem.item
-                    val baseX = placedItem.x + ((item.width - item.base.width) / 2)
-                    val baseY = placedItem.rowY + placedItem.rubyBlockHeight
-                    if (item.hasRuby) {
-                        val rubyX = placedItem.x + ((item.width - item.ruby.width) / 2)
-                        val rubyY = placedItem.rowY +
-                            (placedItem.rubyLaneHeight - item.ruby.height).coerceAtLeast(0)
-                        item.ruby.placeRelative(rubyX, rubyY)
-                    }
-                    item.base.placeRelative(baseX, baseY)
-                }
-            }
-        }
-    }
-}
-
-private data class HeadwordRubySegment(
+internal data class HeadwordRubySegment(
     val base: String,
     val ruby: String?
-)
-
-private data class FuriganaMeasuredSegment(
-    val segment: HeadwordRubySegment,
-    val ruby: Placeable,
-    val base: Placeable,
-    val hasRuby: Boolean,
-    val width: Int
 )
 
 private data class HeadwordRubyToken(
@@ -215,7 +75,7 @@ private data class HeadwordRubyToken(
     val readingHint: String? = null
 )
 
-private fun buildHeadwordFuriganaSegments(
+internal fun buildHeadwordFuriganaSegments(
     text: String,
     reading: String,
     parts: List<WritingPart>
@@ -238,12 +98,25 @@ private fun buildSegmentsFromWritingParts(
 ): List<HeadwordRubySegment>? {
     if (parts.isEmpty()) return null
     val segments = mutableListOf<HeadwordRubySegment>()
+    var pendingKanjiBase = StringBuilder()
+    var pendingKanjiRuby = StringBuilder()
     var partIndex = 0
     var textIndex = 0
     var matched = false
+
+    fun flushPendingKanji() {
+        if (pendingKanjiBase.isEmpty()) return
+        val base = pendingKanjiBase.toString()
+        val ruby = pendingKanjiRuby.toString().takeIf { it.isNotBlank() && it != base }
+        segments += HeadwordRubySegment(base = base, ruby = ruby)
+        pendingKanjiBase = StringBuilder()
+        pendingKanjiRuby = StringBuilder()
+    }
+
     while (textIndex < text.length) {
         val codePoint = Character.codePointAt(text, textIndex)
         val charText = String(Character.toChars(codePoint))
+        val isKanji = isJapaneseRubyKanjiLikeCodePoint(codePoint)
         val part = parts.getOrNull(partIndex)
         val ruby = if (
             part != null &&
@@ -256,12 +129,20 @@ private fun buildSegmentsFromWritingParts(
         } else {
             null
         }
-        segments += HeadwordRubySegment(
-            base = charText,
-            ruby = ruby?.takeIf { isHeadwordKanjiCodePoint(codePoint) && it != charText }
-        )
+
+        if (isKanji && ruby != null && ruby != charText) {
+            pendingKanjiBase.append(charText)
+            pendingKanjiRuby.append(ruby)
+        } else {
+            flushPendingKanji()
+            segments += HeadwordRubySegment(
+                base = charText,
+                ruby = ruby?.takeIf { isKanji && it != charText }
+            )
+        }
         textIndex += Character.charCount(codePoint)
     }
+    flushPendingKanji()
     return segments.takeIf { matched }
 }
 
@@ -367,7 +248,7 @@ private fun consumeHeadwordLiteral(base: String, reading: String, start: Int): I
 }
 
 private fun isHeadwordKanji(char: Char): Boolean {
-    return isHeadwordKanjiCodePoint(char.code)
+    return isJapaneseRubyKanjiLike(char)
 }
 
 private fun isHeadwordKanjiCodePoint(codePoint: Int): Boolean {
@@ -375,12 +256,15 @@ private fun isHeadwordKanjiCodePoint(codePoint: Int): Boolean {
     return block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS ||
         block == Character.UnicodeBlock.CJK_UNIFIED_IDEOGRAPHS_EXTENSION_A ||
         block == Character.UnicodeBlock.CJK_COMPATIBILITY_IDEOGRAPHS ||
+        codePoint == 0x3005 ||
+        codePoint == 0x3006 ||
+        codePoint == 0x30F6 ||
         codePoint == '々'.code ||
         codePoint == '〆'.code
 }
 
 private fun headwordLiteralEquals(textChar: Char, readingChar: Char): Boolean {
-    return textChar == readingChar || normalizeHeadwordLiteral(textChar) == normalizeHeadwordLiteral(readingChar)
+    return japaneseRubyLiteralEquals(textChar, readingChar)
 }
 
 private fun normalizeHeadwordLiteral(char: Char): Char {
@@ -390,9 +274,4 @@ private fun normalizeHeadwordLiteral(char: Char): Char {
         '、', ',' -> '、'
         else -> char
     }
-}
-
-@Suppress("DEPRECATION")
-private fun TextStyle.tightRubyStyle(): TextStyle {
-    return copy(platformStyle = PlatformTextStyle(includeFontPadding = false))
 }

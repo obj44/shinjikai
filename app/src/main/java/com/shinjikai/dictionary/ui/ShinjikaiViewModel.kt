@@ -272,23 +272,49 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun runSearchForTerm(rawTerm: String) {
         val query = rawTerm.trim()
-        activeCategoryId = null
-        activeCategoryName = null
-        error = null
-        activeResultQuery = query
 
         if (query.isBlank()) {
+            if (
+                term.isBlank() &&
+                activeCategoryId == null &&
+                activeCategoryName == null &&
+                activeResultQuery.isBlank() &&
+                searchSpec.value == null &&
+                error == null
+            ) {
+                return
+            }
+            activeCategoryId = null
+            activeCategoryName = null
+            error = null
+            activeResultQuery = ""
             term = ""
             searchSpec.value = null
             return
         }
 
-        rememberRecentSearch(query)
-        term = query
-        searchSpec.value = SearchRequestSpec(
+        val nextSpec = SearchRequestSpec(
             mode = ResultMode.Search,
             query = query
         )
+        if (
+            activeCategoryId == null &&
+            activeCategoryName == null &&
+            activeResultQuery == query &&
+            term == query &&
+            searchSpec.value == nextSpec &&
+            error == null
+        ) {
+            return
+        }
+
+        activeCategoryId = null
+        activeCategoryName = null
+        error = null
+        activeResultQuery = query
+        rememberRecentSearch(query)
+        term = query
+        searchSpec.value = nextSpec
     }
 
     fun runSearch() {
@@ -296,15 +322,26 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun runCategorySearch(categoryId: Int, categoryName: String) {
-        activeCategoryId = categoryId
-        activeCategoryName = categoryName
-        term = categoryName
-        activeResultQuery = categoryName
-        searchSpec.value = SearchRequestSpec(
+        val nextSpec = SearchRequestSpec(
             mode = ResultMode.Category,
             categoryId = categoryId,
             categoryName = categoryName
         )
+        if (
+            activeCategoryId == categoryId &&
+            activeCategoryName == categoryName &&
+            term == categoryName &&
+            activeResultQuery == categoryName &&
+            searchSpec.value == nextSpec
+        ) {
+            return
+        }
+
+        activeCategoryId = categoryId
+        activeCategoryName = categoryName
+        term = categoryName
+        activeResultQuery = categoryName
+        searchSpec.value = nextSpec
     }
 
     fun canLoadMoreResults(): Boolean = false
