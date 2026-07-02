@@ -3,9 +3,6 @@ package com.shinjikai.dictionary.data
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
 
-private val BROWSE_BULLET_PREFIX_REGEX = Regex("""(?m)^\s*[\uD83D\uDD39\u25AA\u2022\u25CF\u25E6]\s*""")
-private val BROWSE_MULTISPACE_REGEX = Regex("""\s{2,}""")
-
 class BrowsePagingSource(
     private val yomitanDao: YomitanDao
 ) : PagingSource<BrowsePageKey, SearchItem>() {
@@ -53,11 +50,7 @@ internal fun YomitanTermListRow.toBrowseSearchItem(): SearchItem {
         id = id,
         kana = reading,
         writings = listOf(Writing(text = expression)),
-        meaningSummary = glossary
-            .replace(BROWSE_BULLET_PREFIX_REGEX, "")
-            .replace("\n", " ")
-            .replace(BROWSE_MULTISPACE_REGEX, " ")
-            .trim(),
+        meaningSummary = buildOfflineSearchPreview(glossary),
         difficulty = difficulty
     )
 }

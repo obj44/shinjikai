@@ -64,9 +64,11 @@ fun BookmarksScreenContent(
     val timeFormatter = remember(locale) {
         SimpleDateFormat("HH:mm", locale)
     }
-    val allIds = uiState.items.map { it.id }.toSet()
+    val allIds = remember(uiState.items) {
+        uiState.items.mapTo(linkedSetOf()) { it.id }
+    }
 
-    LaunchedEffect(uiState.isEditMode, uiState.items.size) {
+    LaunchedEffect(uiState.isEditMode, allIds) {
         viewModel.pruneBookmarkSelection(if (uiState.isEditMode) allIds else emptySet())
     }
 
@@ -82,6 +84,7 @@ fun BookmarksScreenContent(
         if (uiState.isEditMode) {
             val isAllSelected = allIds.isNotEmpty() && uiState.selectedIds.size == allIds.size
             IconButton(
+                enabled = allIds.isNotEmpty(),
                 onClick = {
                     if (isAllSelected) {
                         viewModel.pruneBookmarkSelection(emptySet())
@@ -93,14 +96,19 @@ fun BookmarksScreenContent(
             ) {
                 Icon(
                     imageVector = Icons.Default.ClearAll,
-                    contentDescription = stringResource(R.string.bookmarks_select_all)
+                    contentDescription = stringResource(
+                        if (isAllSelected) {
+                            R.string.bookmarks_clear_selection
+                        } else {
+                            R.string.bookmarks_select_all
+                        }
+                    )
                 )
             }
             IconButton(
+                enabled = uiState.selectedIds.isNotEmpty(),
                 onClick = {
-                    if (uiState.selectedIds.isNotEmpty()) {
-                        viewModel.requestDeleteBookmarks(uiState.selectedIds)
-                    }
+                    viewModel.requestDeleteBookmarks(uiState.selectedIds)
                 }
             ) {
                 Icon(
@@ -115,7 +123,10 @@ fun BookmarksScreenContent(
                 )
             }
         } else {
-            FilledTonalIconButton(onClick = { viewModel.updateBookmarkEditMode(true) }) {
+            FilledTonalIconButton(
+                enabled = allIds.isNotEmpty(),
+                onClick = { viewModel.updateBookmarkEditMode(true) }
+            ) {
                 Icon(
                     imageVector = Icons.Default.Edit,
                     contentDescription = stringResource(R.string.bookmarks_manage)

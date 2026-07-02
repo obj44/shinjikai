@@ -25,9 +25,11 @@ class DictionaryContentTest {
     fun `examples stay associated with their meaning and are not duplicated`() {
         val direct = details.examplesForMeaning(details.word.meanings.single())
         val additional = details.additionalExamples()
+        val additionalFromKnownDirect = details.additionalExamples(direct)
 
         assertEquals(listOf(101), direct.map { it.id })
         assertEquals(listOf(102), additional.map { it.id })
+        assertEquals(additional.map { it.id }, additionalFromKnownDirect.map { it.id })
     }
 
     @Test

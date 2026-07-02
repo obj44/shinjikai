@@ -3,6 +3,8 @@ package com.shinjikai.dictionary.data
 import java.text.Normalizer
 import java.util.Locale
 
+private val ROMAJI_WHITESPACE_REGEX = Regex("""\s+""")
+
 internal object RomajiConverter {
     fun toHiraganaIfRomaji(input: String): String? {
         val normalized = normalizeRomaji(input)
@@ -47,7 +49,7 @@ internal object RomajiConverter {
         }
 
         return output.toString()
-            .replace(Regex("""\s+"""), " ")
+            .replace(ROMAJI_WHITESPACE_REGEX, " ")
             .trim()
             .takeIf { it.isNotBlank() }
     }

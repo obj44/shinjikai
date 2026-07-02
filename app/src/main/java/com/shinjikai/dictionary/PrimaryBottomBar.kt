@@ -1,5 +1,6 @@
 package com.shinjikai.dictionary
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
@@ -146,6 +148,11 @@ private fun RowScope.BottomBarItem(
     label: String,
     colors: NavigationBarItemColors
 ) {
+    val indicatorColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        label = "bottom-bar-indicator"
+    )
+
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
@@ -159,7 +166,7 @@ private fun RowScope.BottomBarItem(
                         .width(22.dp)
                         .height(2.dp)
                         .background(
-                            color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            color = indicatorColor,
                             shape = ShinjikaiUi.PillShape
                         )
                 )

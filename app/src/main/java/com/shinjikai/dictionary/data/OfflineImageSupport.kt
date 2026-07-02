@@ -9,6 +9,8 @@ import java.net.URI
 
 const val OFFLINE_IMAGE_DIR_META_KEY = "offline_image_dir"
 
+private val WINDOWS_ABSOLUTE_IMAGE_PATH_REGEX = Regex("""^[A-Za-z]:/.*""")
+
 private val PICTURE_REFERENCE_KEYS = listOf(
     "Filename",
     "FileName",
@@ -186,7 +188,7 @@ internal fun resolveOfflineImagePath(reference: String, imageRoot: String?): Str
     if (root != null && bundledRelativePath != null) {
         return resolveImageRoot(root, bundledRelativePath)
     }
-    if (normalized.matches(Regex("""^[A-Za-z]:/.*"""))) return normalized
+    if (WINDOWS_ABSOLUTE_IMAGE_PATH_REGEX.matches(normalized)) return normalized
     if (normalized.startsWith("file:/", ignoreCase = true)) return normalized
     if (normalized.startsWith("https://", ignoreCase = true)) return normalized
     if (normalized.startsWith("http://", ignoreCase = true)) return normalized

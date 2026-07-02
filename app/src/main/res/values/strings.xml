@@ -69,6 +69,7 @@
     <string name="bookmarks_title" comment="Title for the bookmarks screen">المحفوظات</string>
     <string name="bookmarks_selected_count">%1$d محدد</string>
     <string name="bookmarks_select_all">تحديد الكل</string>
+    <string name="bookmarks_clear_selection">إلغاء التحديد</string>
     <string name="bookmarks_delete">حذف</string>
     <string name="bookmarks_done">تم</string>
     <string name="bookmarks_manage">إدارة</string>

@@ -25,6 +25,21 @@ class LocalYomitanSourceTest {
     }
 
     @Test
+    fun `arabic search ranks whitespace bounded matches before embedded substrings`() = runTest {
+        val query = "\u062D\u0628"
+        val dao = FakeYomitanDao().apply {
+            glossaryFtsResults = listOf(
+                term(id = 2, expression = "embedded", glossary = "\u0633${query}\u0631"),
+                term(id = 1, expression = "whole", glossary = "\u0641\u064A $query \u0643\u0628\u064A\u0631")
+            )
+        }
+
+        val result = LocalYomitanSource(dao).searchWords(term = query, page = 0).getOrThrow()
+
+        assertEquals(listOf(1, 2), result.items.map { it.id })
+    }
+
+    @Test
     fun `japanese search uses ranked fts results and removes duplicates`() = runTest {
         val dao = FakeYomitanDao().apply {
             ftsResults = listOf(

@@ -250,7 +250,7 @@ class BundledDictionaryInstaller(
     }
 
     private fun jsonlChunkIndex(path: String): Int {
-        return Regex("""data_(\d+)\.jsonl(?:\.(?:xz|gz))?$""", RegexOption.IGNORE_CASE)
+        return DATA_CHUNK_REGEX
             .find(path)
             ?.groupValues
             ?.getOrNull(1)
@@ -292,6 +292,8 @@ class BundledDictionaryInstaller(
             "bundled_dictionary/yomitan_images.tar.xz",
             "bundled_dictionary/raw/yomitan_images.tar.xz"
         )
+        private val DATA_CHUNK_REGEX =
+            Regex("""data_(\d+)\.jsonl(?:\.(?:xz|gz))?$""", RegexOption.IGNORE_CASE)
         private val IMAGE_ARCHIVE_CHUNK_REGEX =
             Regex("""yomitan_images\.part(\d+)\.tar\.xz$""", RegexOption.IGNORE_CASE)
     }

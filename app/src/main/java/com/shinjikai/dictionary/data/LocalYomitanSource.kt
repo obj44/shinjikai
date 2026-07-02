@@ -5,12 +5,13 @@ import com.google.gson.JsonArray
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-private val BULLET_PREFIX_REGEX = Regex("""(?m)^\s*[\uD83D\uDD39\u25AA\u2022\u25CF\u25E6]\s*""")
 private val MULTISPACE_REGEX = Regex("""\s{2,}""")
 private val ARABIC_DIACRITICS_REGEX = Regex("""[\u064B-\u065F\u0670\u06D6-\u06ED]""")
 private val ARABIC_ALEF_VARIANTS_REGEX = Regex("""[أإآٱ]""")
 private val NON_LETTER_NUMBER_SPACE_REGEX = Regex("""[^\p{L}\p{N}\s]""")
 private val SENTENCE_SPLIT_REGEX = Regex("""[\s\u3000,،;；、。.!?！？()\[\]{}<>\"“”'‘’/\\]+""")
+private val FTS_TOKEN_SPLIT_REGEX = Regex("""\s+""")
+private val FTS_TOKEN_RESERVED_CHARS_REGEX = Regex("""[\*\^:\(\)\[\]{}!\\|&<>~]""")
 private val JAPANESE_PARTICLES = listOf("から", "まで", "より", "だけ", "ほど", "など", "って", "では", "には", "は", "が", "を", "に", "で", "と", "へ", "も", "や", "か", "の")
 private const val DETAIL_CACHE_SIZE = 64
 private const val SEARCH_PLAN_CACHE_SIZE = 64
@@ -202,7 +203,7 @@ class LocalYomitanSource(
                         writings = listOf(Writing(text = row.expression)),
                         meanings = listOf(
                             Meaning(
-                                arabic = cleanGlossary(row.glossary),
+                                arabic = cleanOfflineGlossaryText(row.glossary),
                                 note = row.note
                             )
                         ),
@@ -326,23 +327,10 @@ class LocalYomitanSource(
             id = row.id,
             kana = row.reading,
             writings = listOf(Writing(text = row.expression)),
-            meaningSummary = buildSearchPreview(row.glossary),
+            meaningSummary = buildOfflineSearchPreview(row.glossary),
             jlpt = 0,
             difficulty = row.difficulty
         )
-    }
-
-    private fun buildSearchPreview(glossary: String): String {
-        return cleanGlossary(glossary)
-            .replace("\n", " ")
-            .replace(MULTISPACE_REGEX, " ")
-            .trim()
-    }
-
-    private fun cleanGlossary(glossary: String): String {
-        return glossary
-            .replace(BULLET_PREFIX_REGEX, "")
-            .trim()
     }
 
     private fun isArabicQuery(text: String): Boolean {
@@ -375,8 +363,7 @@ class LocalYomitanSource(
         if (glossary == query) return 0
         if (glossary.startsWith("$query ")) return 1
         if (glossary.startsWith(query)) return 2
-        val wholeWord = Regex("""(^|\s)${Regex.escape(query)}(\s|$)""")
-        if (wholeWord.containsMatchIn(glossary)) return 3
+        if (containsRegexWhitespaceBoundedMatch(glossary, query)) return 3
 
         val index = glossary.indexOf(query)
         return if (index >= 0) 100 + index else Int.MAX_VALUE
@@ -509,7 +496,7 @@ class LocalYomitanSource(
 
     private fun buildGlossaryOnlyFtsQuery(rawQuery: String): String? {
         val tokens = rawQuery.trim()
-            .split(Regex("""\s+"""))
+            .split(FTS_TOKEN_SPLIT_REGEX)
             .mapNotNull { token -> sanitizeFtsToken(token)?.let { "glossary:$it*" } }
             .distinct()
 
@@ -522,10 +509,27 @@ class LocalYomitanSource(
         if (trimmed.isBlank()) return null
 
         val cleaned = trimmed
-            .replace(Regex("""[\*\^:\(\)\[\]{}!\\|&<>~]"""), "")
+            .replace(FTS_TOKEN_RESERVED_CHARS_REGEX, "")
             .trim()
 
         return cleaned.takeIf { it.isNotBlank() }
+    }
+
+    private fun containsRegexWhitespaceBoundedMatch(text: String, query: String): Boolean {
+        if (query.isEmpty()) return false
+        var index = text.indexOf(query)
+        while (index >= 0) {
+            val end = index + query.length
+            val startsAtBoundary = index == 0 || isDefaultRegexWhitespace(text[index - 1])
+            val endsAtBoundary = end == text.length || isDefaultRegexWhitespace(text[end])
+            if (startsAtBoundary && endsAtBoundary) return true
+            index = text.indexOf(query, startIndex = index + 1)
+        }
+        return false
+    }
+
+    private fun isDefaultRegexWhitespace(ch: Char): Boolean {
+        return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\u000B' || ch == '\u000C' || ch == '\r'
     }
 
     private fun isJapaneseCharacter(ch: Char): Boolean {

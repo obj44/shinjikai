@@ -16,6 +16,12 @@ internal fun WordDetailsResponse.directMeaningExamples(): List<SentenceExample> 
 
 internal fun WordDetailsResponse.additionalExamples(): List<SentenceExample> {
     val directExamples = directMeaningExamples()
+    return additionalExamples(directExamples)
+}
+
+internal fun WordDetailsResponse.additionalExamples(
+    directExamples: List<SentenceExample>
+): List<SentenceExample> {
     val directIds = directExamples.mapNotNullTo(hashSetOf()) { it.id.takeIf { id -> id > 0 } }
     val directContentKeys = directExamples.mapTo(hashSetOf(), SentenceExample::stableContentKey)
     val unassignedMappedExamples = sentenceMap.orEmpty().values

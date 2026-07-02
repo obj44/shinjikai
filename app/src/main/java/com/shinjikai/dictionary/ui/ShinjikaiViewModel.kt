@@ -89,7 +89,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             categoriesPreloadJob?.cancel()
             categoriesPreloadJob = null
             categoryNameById = emptyMap()
-            searchRefreshNonce.value = searchRefreshNonce.value + 1
+            invalidateSearchAndBrowsePaging()
         }
 
     private var repository: ShinjikaiRepository = ShinjikaiRepository(source = dictionarySource)
@@ -591,7 +591,6 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                     refreshOfflineTermCount()
                     refreshOfflinePreview()
                     dictionarySource = createDictionarySource()
-                    searchRefreshNonce.value = searchRefreshNonce.value + 1
                 } else {
                     offlineImportStatus = null
                     refreshOfflineTermCount()
@@ -964,6 +963,10 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun createDictionarySource(): DictionarySource {
         return LocalYomitanSource(database.yomitanDao())
+    }
+
+    private fun invalidateSearchAndBrowsePaging() {
+        searchRefreshNonce.value = searchRefreshNonce.value + 1
     }
 
     private companion object {

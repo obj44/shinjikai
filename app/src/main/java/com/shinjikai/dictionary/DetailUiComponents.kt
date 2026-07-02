@@ -122,7 +122,9 @@ private val MEANING_ARABIC_SEMICOLON_REGEX = Regex("""\s*؛\s*""")
 private val MEANING_PAREN_BAR_REGEX = Regex("""\(\|\s*(.*?)\s*\|\)""")
 private val MEANING_INLINE_TAG_REGEX =
     Regex("""\[\{\s*([^:{}\[\]]+)\s*:\s*([^{}\[\]]+)\s*\}\]|\{\s*([^:{}\[\]]+)\s*:\s*([^{}\[\]]+)\s*\}""")
+private val MEANING_BRACED_LABEL_REGEX = Regex("""\{\s*([^:{}][^:{}]*?)\s*\}""")
 private val GLOSSARY_REFERENCE_REGEX = Regex("""\{([^:{}]+):(\d+)\}""")
+private val WINDOWS_ABSOLUTE_IMAGE_PATH_REGEX = Regex("""^[A-Za-z]:/.*""")
 private val LOCAL_ABSOLUTE_IMAGE_PATH_REGEX = Regex("""^/(data|storage|sdcard|mnt)/.*""")
 
 @Composable
@@ -169,46 +171,55 @@ fun DetailScreenBody(
             return@Column
         }
 
-        val primaryWriting = detailState.details?.word?.writings?.firstOrNull { it.text.isNotBlank() }
+        val details = detailState.details
+        val primaryWriting = remember(details) {
+            details?.word?.writings?.firstOrNull { it.text.isNotBlank() }
+        }
         val kanji = primaryWriting?.text
             .orEmpty()
             .ifBlank { item.primaryWriting.ifBlank { "-" } }
-        val kana = detailState.details?.word?.kana.orEmpty().ifBlank { item.kana.ifBlank { "-" } }
-        val alternateWritings = detailState.details?.word?.writings.orEmpty()
-            .map { it.text.trim() }
-            .filter { it.isNotBlank() && it != kanji }
-            .distinct()
+        val kana = details?.word?.kana.orEmpty().ifBlank { item.kana.ifBlank { "-" } }
+        val alternateWritings = remember(details, kanji) {
+            details?.word?.writings.orEmpty()
+                .map { it.text.trim() }
+                .filter { it.isNotBlank() && it != kanji }
+                .distinct()
+        }
         val notePrefix = stringResource(R.string.detail_note_prefix)
-        val meaningEntries = formatDetailMeaningEntries(detailState.details)
-        val definitionContent = formatDefinition(
-            meanings = detailState.details?.word?.meanings,
-            notePrefix = notePrefix,
-            enableGlossaryLinks = true
-        ).takeIf { it.text.isNotBlank() }
-            ?: run {
-                if (useOfflineMode) {
-                    DefinitionContent(
-                        text = item.meaningSummary.ifBlank { "-" },
-                        references = emptyList()
-                    )
-                } else {
-                    val fallbackReferences = mutableListOf<GlossaryReference>()
-                    val fallbackText = stripGlossaryReferences(
-                        raw = normalizeMeaningText(item.meaningSummary),
-                        enableGlossaryLinks = true,
-                        references = fallbackReferences
-                    ).replace("\n", " ").replace(SEARCH_PREVIEW_MULTISPACE_REGEX, " ").trim()
+        val meaningEntries = remember(details) {
+            formatDetailMeaningEntries(details)
+        }
+        val definitionContent = remember(details?.word?.meanings, notePrefix, useOfflineMode, item.meaningSummary) {
+            formatDefinition(
+                meanings = details?.word?.meanings,
+                notePrefix = notePrefix,
+                enableGlossaryLinks = true
+            ).takeIf { it.text.isNotBlank() }
+                ?: run {
+                    if (useOfflineMode) {
+                        DefinitionContent(
+                            text = item.meaningSummary.ifBlank { "-" },
+                            references = emptyList()
+                        )
+                    } else {
+                        val fallbackReferences = mutableListOf<GlossaryReference>()
+                        val fallbackText = stripGlossaryReferences(
+                            raw = normalizeMeaningText(item.meaningSummary),
+                            enableGlossaryLinks = true,
+                            references = fallbackReferences
+                        ).replace("\n", " ").replace(SEARCH_PREVIEW_MULTISPACE_REGEX, " ").trim()
 
-                    DefinitionContent(
-                        text = fallbackText.ifBlank { "-" },
-                        references = fallbackReferences
-                    )
+                        DefinitionContent(
+                            text = fallbackText.ifBlank { "-" },
+                            references = fallbackReferences
+                        )
+                    }
                 }
-            }
-        val jlptLevel = detailState.details?.word?.jlpt?.takeIf { it in 1..5 } ?: item.jlpt.takeIf { it in 1..5 }
-        val commonnessLevel = detailState.details?.word?.difficulty?.takeIf { it in 1..5 }
+        }
+        val jlptLevel = details?.word?.jlpt?.takeIf { it in 1..5 } ?: item.jlpt.takeIf { it in 1..5 }
+        val commonnessLevel = details?.word?.difficulty?.takeIf { it in 1..5 }
             ?: item.difficulty.takeIf { it in 1..5 }
-        val categoryChips = detailState.details?.word?.categoryIds.orEmpty()
+        val categoryChips = details?.word?.categoryIds.orEmpty()
             .map { id ->
                 CategoryChipModel(
                     id = id,
@@ -286,7 +297,9 @@ fun DetailScreenBody(
             )
         }
 
-        val wordPictures = extractDetailPictures(detailState.details?.word?.pictures.orEmpty())
+        val wordPictures = remember(details?.word?.pictures) {
+            extractDetailPictures(details?.word?.pictures.orEmpty())
+        }
         if (wordPictures.isNotEmpty()) {
             PicturesSection(
                 title = stringResource(R.string.detail_pictures_title),
@@ -295,11 +308,13 @@ fun DetailScreenBody(
             )
         }
 
-        val relatedItems = detailState.details?.similarWords.orEmpty().map {
-            RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana)
+        val relatedItems = remember(details?.similarWords) {
+            details?.similarWords.orEmpty().map {
+                RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana)
+            }
+                .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
+                .distinctBy { "${it.wordId}|${it.meaningNo}|${it.text.trim()}|${it.kana.trim()}" }
         }
-            .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
-            .distinctBy { "${it.wordId}|${it.meaningNo}|${it.text.trim()}|${it.kana.trim()}" }
         if (relatedItems.isNotEmpty()) {
             RelatedWordsCard(
                 title = stringResource(R.string.detail_similar_words_title),
@@ -312,10 +327,12 @@ fun DetailScreenBody(
             )
         }
 
-        val homophones = detailState.details?.homophones.orEmpty()
-            .map { RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana) }
-            .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
-            .distinctBy { it.wordId }
+        val homophones = remember(details?.homophones) {
+            details?.homophones.orEmpty()
+                .map { RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana) }
+                .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
+                .distinctBy { it.wordId }
+        }
         if (homophones.isNotEmpty()) {
             RelatedWordsCard(
                 title = stringResource(R.string.detail_homophones_title),
@@ -328,8 +345,10 @@ fun DetailScreenBody(
             )
         }
 
-        val kanjiInfo = detailState.details?.kanjis.orEmpty()
-            .filter { it.displayCharacter().isNotBlank() }
+        val kanjiInfo = remember(details?.kanjis) {
+            details?.kanjis.orEmpty()
+                .filter { it.displayCharacter().isNotBlank() }
+        }
         if (kanjiInfo.isNotEmpty()) {
             KanjiInformationSection(
                 title = stringResource(R.string.detail_kanji_title),
@@ -337,7 +356,12 @@ fun DetailScreenBody(
             )
         }
 
-        val examples = detailState.details?.additionalExamples().orEmpty()
+        val directMeaningExampleList = remember(meaningEntries) {
+            meaningEntries.flatMap { it.examples }
+        }
+        val examples = remember(details, directMeaningExampleList) {
+            details?.additionalExamples(directMeaningExampleList).orEmpty()
+        }
         if (examples.isNotEmpty()) {
             ExamplesCard(
                 title = stringResource(R.string.detail_additional_examples_title),
@@ -412,7 +436,7 @@ internal fun normalizeMeaningText(raw: String): String = raw.trim()
             else -> "$label:"
         }
     }
-    .replace(Regex("""\{\s*([^:{}][^:{}]*?)\s*\}""")) { match ->
+    .replace(MEANING_BRACED_LABEL_REGEX) { match ->
         val label = match.groupValues[1].trim()
         if (label.isEmpty()) "" else "$label:"
     }
@@ -668,7 +692,7 @@ private fun normalizeApiImageUrl(raw: String): String? {
     if (trimmed.isBlank()) return null
     val normalized = trimmed.replace('\\', '/')
     return when {
-        normalized.matches(Regex("""^[A-Za-z]:/.*""")) -> normalized
+        WINDOWS_ABSOLUTE_IMAGE_PATH_REGEX.matches(normalized) -> normalized
         normalized.startsWith("file:/", true) -> normalized
         LOCAL_ABSOLUTE_IMAGE_PATH_REGEX.matches(normalized) -> "file://$normalized"
         else -> null
@@ -710,9 +734,12 @@ internal fun formatOnlineSearchPreview(raw: String): String {
         .trim()
 }
 
-internal fun formatEpochAsLocal(epochMs: Long): String {
+internal fun formatEpochAsLocal(
+    epochMs: Long,
+    formatter: DateFormat = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+): String {
     return runCatching {
-        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(epochMs))
+        formatter.format(Date(epochMs))
     }.getOrDefault("-")
 }
 
@@ -1240,7 +1267,11 @@ private fun EntryPicturesRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(pictures, key = DetailPicture::url) { picture ->
+            items(
+                items = pictures,
+                key = DetailPicture::url,
+                contentType = { "detail-picture" }
+            ) { picture ->
                 PictureCard(picture = picture, onClick = { onImageClick(picture.url) })
             }
         }

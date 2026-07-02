@@ -88,6 +88,16 @@ class OfflineImageSupportTest {
     }
 
     @Test
+    fun `windows absolute image paths are preserved`() {
+        val resolved = resolveOfflineImagePath(
+            "C:\\images\\word.png",
+            File("build/test-offline/yomitan_images")
+        )
+
+        assertEquals("C:/images/word.png", resolved)
+    }
+
+    @Test
     fun `picture captions survive canonicalization and path resolution`() {
         val imageRoot = File("build/test-offline/yomitan_images").absolutePath.replace('\\', '/')
         val picture = JsonParser.parseString(

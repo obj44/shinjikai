@@ -75,6 +75,8 @@ import com.shinjikai.dictionary.integration.ANKIDROID_PERMISSION
 import com.shinjikai.dictionary.integration.AnkiExporter
 import com.shinjikai.dictionary.ui.SettingsUiState
 import com.shinjikai.dictionary.ui.ShinjikaiViewModel
+import java.text.DateFormat
+import java.util.Locale
 
 private data class OfflineImportStatusUi(
     val label: String,
@@ -639,6 +641,10 @@ private fun OfflineImporterCard(
 ) {
     val hasOfflineDictionary = uiState.offlineTermCount > 0
     val statusUi = offlineImportStatusUi(uiState, hasOfflineDictionary)
+    val locale = Locale.getDefault()
+    val importDateFormatter = remember(locale) {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, locale)
+    }
     val summaryText = when {
         uiState.isImportingOfflineData ->
             uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline)
@@ -647,7 +653,9 @@ private fun OfflineImporterCard(
         else ->
             "اختر أرشيف `.zip` أو `.tar.xz` لاستيراد النصوص والصور."
     }
-    val latestUpdateText = uiState.offlineLastImportEpochMs?.let(::formatEpochAsLocal) ?: "لم يتم الاستيراد بعد"
+    val latestUpdateText = uiState.offlineLastImportEpochMs
+        ?.let { epochMs -> formatEpochAsLocal(epochMs, importDateFormatter) }
+        ?: "لم يتم الاستيراد بعد"
     val latestSourceText = uiState.offlineLastImportSource?.let(::formatImportSourceName) ?: "لا يوجد مصدر مسجل بعد"
 
     Card(
