@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -832,7 +833,9 @@ private fun DetailWordHeaderCard(
                 text = kanji,
                 reading = kana,
                 parts = writingParts,
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onKanjiClick),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button, onClick = onKanjiClick),
                 baseStyle = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.SemiBold),
                 rubyStyle = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, lineHeight = 14.sp),
                 textAlign = TextAlign.Center
@@ -1288,7 +1291,7 @@ private fun PictureCard(picture: DetailPicture, onClick: () -> Unit) {
         border = ShinjikaiUi.cardBorder(alpha = 0.32f),
         modifier = Modifier
             .size(width = 240.dp, height = if (picture.description.isBlank()) 170.dp else 214.dp)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(10.dp),

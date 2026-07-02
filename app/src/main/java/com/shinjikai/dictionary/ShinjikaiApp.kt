@@ -691,7 +691,7 @@ private fun DetailScreenContent(
     val addToAnkiFailedMessage = stringResource(R.string.detail_add_to_anki_failed)
     val addToAnkiOpenedShareMessage = stringResource(R.string.detail_add_to_anki_opened_share)
     val addToAnkiNotInstalledMessage = stringResource(R.string.detail_add_to_anki_not_installed)
-    val addToAnkiNoAudioMessage = "Added to Anki without audio."
+    val addToAnkiNoAudioMessage = stringResource(R.string.detail_add_to_anki_success_no_audio)
     val coroutineScope = rememberCoroutineScope()
     val ankiNote = remember(useOfflineMode, detailState.selectedItem, detailState.details) {
         buildDetailAnkiNoteContent(

@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
+private val RAW_SHINJIKAI_WHITESPACE_REGEX = Regex("""\s+""")
+
 internal data class JsonLineInput(
     val label: String,
     val openStream: () -> InputStream
@@ -212,7 +214,7 @@ class RawShinjikaiImporter(
             .filter { it.isNotBlank() }
             .take(3)
             .joinToString(separator = " / ")
-            .replace(Regex("""\s+"""), " ")
+            .replace(RAW_SHINJIKAI_WHITESPACE_REGEX, " ")
             .trim()
     }
 }

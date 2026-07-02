@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
@@ -44,7 +45,7 @@ fun DictionaryEntryCard(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick),
         shape = ShinjikaiUi.CompactShape,
         color = MaterialTheme.colorScheme.surface,
         border = ShinjikaiUi.cardBorder(alpha = 0.18f)

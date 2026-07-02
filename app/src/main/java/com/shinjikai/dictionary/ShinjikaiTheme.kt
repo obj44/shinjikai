@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -335,7 +336,11 @@ fun ShinjikaiChip(
         MaterialTheme.colorScheme.onSurface
     }
     Surface(
-        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
+        modifier = if (onClick != null) {
+            modifier.clickable(role = Role.Button, onClick = onClick)
+        } else {
+            modifier
+        },
         shape = ShinjikaiUi.PillShape,
         color = containerColor,
         border = ShinjikaiUi.cardBorder(alpha = if (selected) 0.16f else 0.18f)

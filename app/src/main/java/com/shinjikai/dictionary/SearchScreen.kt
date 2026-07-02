@@ -3,6 +3,7 @@ package com.shinjikai.dictionary
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -73,7 +74,7 @@ import com.shinjikai.dictionary.ui.ShinjikaiViewModel
 import kotlinx.coroutines.flow.Flow
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun SearchScreenContent(
     appName: String,
     useOfflineMode: Boolean,
@@ -248,7 +249,8 @@ fun SearchScreenContent(
                                         ) { item ->
                                             OfflinePreviewCard(
                                                 item = item,
-                                                onClick = { onOpenDetails(item) }
+                                                onClick = { onOpenDetails(item) },
+                                                modifier = Modifier.animateItemPlacement()
                                             )
                                         }
                                     }
@@ -314,6 +316,7 @@ fun SearchScreenContent(
                                         item = item,
                                         onClick = { onOpenDetails(item) },
                                         modifier = Modifier
+                                            .animateItemPlacement()
                                             .fillMaxWidth(),
                                         previewMaxLines = if (uiState.activeCategoryId != null) 1 else 2
                                     )
@@ -543,11 +546,13 @@ private fun LandingSuggestions(
 @Composable
 private fun OfflinePreviewCard(
     item: SearchItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     DictionaryEntryCard(
         item = item,
         onClick = onClick,
+        modifier = modifier,
         previewMaxLines = 2
     )
 }

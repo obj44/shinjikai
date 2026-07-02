@@ -1,5 +1,6 @@
 package com.shinjikai.dictionary
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
@@ -48,7 +48,7 @@ import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun BookmarksScreenContent(
     viewModel: ShinjikaiViewModel,
     uiState: BookmarksUiState,
@@ -200,7 +200,10 @@ fun BookmarksScreenContent(
                     val item = bookmark.item
                     val isSelected = uiState.selectedIds.contains(bookmark.id)
 
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(
+                        modifier = Modifier.animateItemPlacement(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         if (showHeader) {
                             Text(
                                 text = thisDate,

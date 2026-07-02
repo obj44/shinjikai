@@ -139,15 +139,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     var term by mutableStateOf("")
-    var loading by mutableStateOf(false)
-    var error by mutableStateOf<String?>(null)
-    var results by mutableStateOf<List<SearchItem>>(emptyList())
-    var resultHeader by mutableStateOf<String?>(null)
     var activeResultQuery by mutableStateOf("")
-    var currentResultsPage by mutableStateOf(0)
-    var currentResultsPageCount by mutableStateOf(0)
-    var currentResultsTotalCount by mutableStateOf(0)
-    var loadingMore by mutableStateOf(false)
     var loadingDetails by mutableStateOf(false)
     var detailsError by mutableStateOf<String?>(null)
     var details by mutableStateOf<WordDetailsResponse?>(null)
@@ -279,14 +271,12 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 activeCategoryId == null &&
                 activeCategoryName == null &&
                 activeResultQuery.isBlank() &&
-                searchSpec.value == null &&
-                error == null
+                searchSpec.value == null
             ) {
                 return
             }
             activeCategoryId = null
             activeCategoryName = null
-            error = null
             activeResultQuery = ""
             term = ""
             searchSpec.value = null
@@ -302,15 +292,13 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             activeCategoryName == null &&
             activeResultQuery == query &&
             term == query &&
-            searchSpec.value == nextSpec &&
-            error == null
+            searchSpec.value == nextSpec
         ) {
             return
         }
 
         activeCategoryId = null
         activeCategoryName = null
-        error = null
         activeResultQuery = query
         rememberRecentSearch(query)
         term = query
@@ -343,10 +331,6 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         activeResultQuery = categoryName
         searchSpec.value = nextSpec
     }
-
-    fun canLoadMoreResults(): Boolean = false
-
-    fun loadMoreResults() = Unit
 
     private fun openDetailsInternal(item: SearchItem) {
         detailsLoadJob?.cancel()

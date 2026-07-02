@@ -1,5 +1,6 @@
 package com.shinjikai.dictionary
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,7 +45,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun HistoryScreenContent(
     uiState: SearchUiState,
     viewModel: ShinjikaiViewModel,
@@ -116,7 +117,9 @@ fun HistoryScreenContent(
                         contentType = { "history-entry" }
                     ) { historyEntry ->
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .animateItemPlacement()
+                                .fillMaxWidth(),
                             shape = ShinjikaiUi.CardShape,
                             color = MaterialTheme.colorScheme.surface,
                             border = ShinjikaiUi.cardBorder(alpha = 0.22f),

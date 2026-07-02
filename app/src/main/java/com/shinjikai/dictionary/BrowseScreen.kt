@@ -1,5 +1,6 @@
 package com.shinjikai.dictionary
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -31,7 +32,7 @@ import com.shinjikai.dictionary.ui.ShinjikaiViewModel
 import kotlinx.coroutines.flow.Flow
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun BrowseScreenContent(
     viewModel: ShinjikaiViewModel,
     browseFlow: Flow<PagingData<SearchItem>>,
@@ -115,6 +116,7 @@ fun BrowseScreenContent(
                 DictionaryEntryCard(
                     item = item,
                     onClick = { onOpenDetails(item) },
+                    modifier = Modifier.animateItemPlacement(),
                     previewMaxLines = 2
                 )
             }

@@ -1,6 +1,7 @@
 package com.shinjikai.dictionary
 
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -58,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +69,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,6 +80,9 @@ import com.shinjikai.dictionary.ui.SettingsUiState
 import com.shinjikai.dictionary.ui.ShinjikaiViewModel
 import java.text.DateFormat
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class OfflineImportStatusUi(
     val label: String,
@@ -270,34 +276,49 @@ fun AnkiExporterSettingsScreenContent(
     onGoBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val canRequestDirectAnkiAdd = remember(context) {
+        AnkiExporter.canRequestDirectAdd(context)
+    }
+    var hasAnkiDatabasePermission by remember(context) {
+        mutableStateOf(AnkiExporter.hasDatabasePermission(context))
+    }
     var availableDecks by remember { mutableStateOf<List<String>>(emptyList()) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var deckMenuExpanded by remember { mutableStateOf(false) }
+    var isLoadingDecks by remember { mutableStateOf(false) }
+    suspend fun refreshAvailableDecks() {
+        statusMessage = null
+        isLoadingDecks = true
+        val decks = loadAnkiDeckNamesOffMain(context)
+        isLoadingDecks = false
+        availableDecks = decks
+        statusMessage = if (decks.isEmpty()) {
+            context.getString(R.string.settings_anki_no_decks)
+        } else {
+            null
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        availableDecks = if (granted) {
-            AnkiExporter.loadDeckNames(context)
+        hasAnkiDatabasePermission = granted
+        if (granted) {
+            coroutineScope.launch {
+                refreshAvailableDecks()
+            }
         } else {
-            emptyList()
-        }
-        statusMessage = when {
-            granted && availableDecks.isEmpty() -> context.getString(R.string.settings_anki_no_decks)
-            granted -> null
-            else -> context.getString(R.string.settings_anki_permission_required)
+            availableDecks = emptyList()
+            isLoadingDecks = false
+            statusMessage = context.getString(R.string.settings_anki_permission_required)
         }
     }
 
     LaunchedEffect(Unit) {
         when {
-            !AnkiExporter.canRequestDirectAdd(context) ->
+            !canRequestDirectAnkiAdd ->
                 statusMessage = context.getString(R.string.settings_anki_install_required)
-            AnkiExporter.hasDatabasePermission(context) -> {
-                availableDecks = AnkiExporter.loadDeckNames(context)
-                if (availableDecks.isEmpty()) {
-                    statusMessage = context.getString(R.string.settings_anki_no_decks)
-                }
-            }
+            hasAnkiDatabasePermission -> refreshAvailableDecks()
             else -> statusMessage = context.getString(R.string.settings_anki_allow_access)
         }
     }
@@ -342,12 +363,27 @@ fun AnkiExporterSettingsScreenContent(
                 )
             }
 
-            if (!AnkiExporter.hasDatabasePermission(context) && AnkiExporter.canRequestDirectAdd(context)) {
+            if (!hasAnkiDatabasePermission && canRequestDirectAnkiAdd) {
                 Button(
                     onClick = { permissionLauncher.launch(ANKIDROID_PERMISSION) },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(stringResource(R.string.settings_anki_allow_access_button))
+                }
+            }
+
+            if (isLoadingDecks) {
+                ShinjikaiCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(
+                            text = stringResource(R.string.settings_loading_inline),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
 
@@ -420,6 +456,11 @@ fun AnkiExporterSettingsScreenContent(
     }
 }
 
+private suspend fun loadAnkiDeckNamesOffMain(context: Context): List<String> =
+    withContext(Dispatchers.IO) {
+        runCatching { AnkiExporter.loadDeckNames(context) }.getOrDefault(emptyList())
+    }
+
 @Composable
 private fun SettingsLinkRow(
     icon: ImageVector? = null,
@@ -432,7 +473,7 @@ private fun SettingsLinkRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -446,12 +487,19 @@ private fun SettingsLinkRow(
                 painterRes != null -> SettingsLeadingPainterIcon(painterRes = painterRes)
                 icon != null -> SettingsLeadingIcon(icon = icon)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                 )
             }
         }
@@ -593,15 +641,15 @@ private fun LocalDictionarySummaryCard(
         uiState.offlineImportError ->
             uiState.offlineImportStatus ?: stringResource(R.string.offline_import_failure)
         hasOfflineDictionary ->
-            "إدارة بيانات القاموس والاستيراد."
+            stringResource(R.string.settings_local_summary_ready)
         else ->
-            "تجهيز بيانات القاموس وإدارة الاستيراد."
+            stringResource(R.string.settings_local_summary_missing)
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Top
@@ -649,14 +697,15 @@ private fun OfflineImporterCard(
         uiState.isImportingOfflineData ->
             uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline)
         hasOfflineDictionary ->
-            "تم تثبيت ${uiState.offlineTermCount} مدخل ويمكنك استخدام البحث بدون اتصال."
+            stringResource(R.string.settings_offline_import_summary_ready, uiState.offlineTermCount)
         else ->
-            "اختر أرشيف `.zip` أو `.tar.xz` لاستيراد النصوص والصور."
+            stringResource(R.string.settings_offline_import_summary_empty)
     }
     val latestUpdateText = uiState.offlineLastImportEpochMs
         ?.let { epochMs -> formatEpochAsLocal(epochMs, importDateFormatter) }
-        ?: "لم يتم الاستيراد بعد"
-    val latestSourceText = uiState.offlineLastImportSource?.let(::formatImportSourceName) ?: "لا يوجد مصدر مسجل بعد"
+        ?: stringResource(R.string.settings_last_import_never)
+    val latestSourceText = uiState.offlineLastImportSource?.let(::formatImportSourceName)
+        ?: stringResource(R.string.settings_last_import_source_none)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -712,22 +761,22 @@ private fun OfflineImporterCard(
 
             ImporterMetricRow(
                 title = stringResource(R.string.settings_local_count, uiState.offlineTermCount),
-                subtitle = "عدد المداخل المتاحة للبحث بدون اتصال"
+                subtitle = stringResource(R.string.settings_offline_metric_count_subtitle)
             )
 
             ImporterMetricRow(
-                title = "آخر تحديث",
+                title = stringResource(R.string.settings_offline_metric_last_update_title),
                 subtitle = latestUpdateText
             )
 
             ImporterMetricRow(
-                title = "المصدر الأخير",
+                title = stringResource(R.string.settings_offline_metric_source_title),
                 subtitle = latestSourceText
             )
 
             ImporterMetricRow(
-                title = "الملفات المدعومة",
-                subtitle = "ZIP و TAR.XZ للنصوص والصور"
+                title = stringResource(R.string.settings_offline_metric_supported_files_title),
+                subtitle = stringResource(R.string.settings_offline_metric_supported_files_subtitle)
             )
 
             Row(
@@ -749,10 +798,10 @@ private fun OfflineImporterCard(
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
-                                Text(text = "جاري الفهرسة..")
+                                Text(text = stringResource(R.string.settings_offline_indexing_inline))
                             }
                     } else {
-                        Text("استيراد ملف")
+                        Text(stringResource(R.string.settings_offline_import_file))
                     }
                 }
                 OutlinedButton(
@@ -816,19 +865,19 @@ private fun offlineImportStatusUi(
 ): OfflineImportStatusUi {
     return when {
         uiState.isImportingOfflineData -> OfflineImportStatusUi(
-            label = "جاري الاستيراد",
+            label = stringResource(R.string.settings_offline_status_importing),
             color = MaterialTheme.colorScheme.primary
         )
         uiState.offlineImportError -> OfflineImportStatusUi(
-            label = "تحتاج العملية إلى إعادة المحاولة",
+            label = stringResource(R.string.settings_offline_status_retry),
             color = MaterialTheme.colorScheme.error
         )
         hasOfflineDictionary -> OfflineImportStatusUi(
-            label = "جاهز للاستخدام بدون إنترنت",
+            label = stringResource(R.string.settings_offline_status_ready),
             color = ShinjikaiUi.SuccessColor
         )
         else -> OfflineImportStatusUi(
-            label = "لم يتم تثبيت القاموس بعد",
+            label = stringResource(R.string.settings_offline_status_missing),
             color = MaterialTheme.colorScheme.tertiary
         )
     }
@@ -935,7 +984,11 @@ private fun StatusMessage(
                     OutlinedButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(message))
-                            Toast.makeText(context, "تم نسخ الرسالة", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.settings_copy_message_toast),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         border = BorderStroke(1.dp, tint.copy(alpha = 0.35f))
                     ) {
@@ -946,7 +999,7 @@ private fun StatusMessage(
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "نسخ الرسالة",
+                            text = stringResource(R.string.settings_copy_message_action),
                             color = tint,
                             modifier = Modifier.padding(start = 8.dp)
                         )
@@ -954,51 +1007,6 @@ private fun StatusMessage(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SettingsLinkRow(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SettingsLeadingIcon(icon = icon)
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                )
-            }
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-            contentDescription = contentDescription
-        )
     }
 }
 
