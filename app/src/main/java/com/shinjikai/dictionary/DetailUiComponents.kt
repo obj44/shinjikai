@@ -114,6 +114,7 @@ private const val EXAMPLES_PAGE_SIZE = 3
 private val MEANING_BULLET_PREFIX_REGEX =
     Regex("(?m)^\\s*[\\uD83D\\uDD39\\u25AA\\u2022\\u25CF\\u25E6]\\s*")
 private val MEANING_MULTISPACE_REGEX = Regex("""[ \t]{2,}""")
+private val SEARCH_PREVIEW_MULTISPACE_REGEX = Regex("""\s{2,}""")
 private val MEANING_EMPTY_BRACES_REGEX = Regex("""\{\s*\}""")
 private val MEANING_TRAILING_SPACES_REGEX = Regex("""(?m)^\s+$""")
 private val MEANING_CONTROL_MARKS_REGEX = Regex("""[\u200E\u200F\u202A-\u202E\u2066-\u2069]""")
@@ -196,7 +197,7 @@ fun DetailScreenBody(
                         raw = normalizeMeaningText(item.meaningSummary),
                         enableGlossaryLinks = true,
                         references = fallbackReferences
-                    ).replace("\n", " ").replace(Regex("""\s{2,}"""), " ").trim()
+                    ).replace("\n", " ").replace(SEARCH_PREVIEW_MULTISPACE_REGEX, " ").trim()
 
                     DefinitionContent(
                         text = fallbackText.ifBlank { "-" },
@@ -698,14 +699,14 @@ internal fun formatOfflineSearchPreview(raw: String): String {
         raw = normalizeMeaningText(raw),
         enableGlossaryLinks = true,
         references = references
-    ).replace("\n", " ").replace(Regex("""\s{2,}"""), " ").trim()
+    ).replace("\n", " ").replace(SEARCH_PREVIEW_MULTISPACE_REGEX, " ").trim()
 }
 
 internal fun formatOnlineSearchPreview(raw: String): String {
     return normalizeMeaningText(raw)
         .replace(GLOSSARY_REFERENCE_REGEX) { match -> match.groupValues[1].trim() }
         .replace("\n", " ")
-        .replace(Regex("""\s{2,}"""), " ")
+        .replace(SEARCH_PREVIEW_MULTISPACE_REGEX, " ")
         .trim()
 }
 
@@ -917,7 +918,7 @@ internal fun buildDetailAnkiNoteContent(
             ?: DefinitionContent(
                 text = normalizeMeaningText(item.meaningSummary)
                     .replace("\n", " ")
-                    .replace(Regex("""\s{2,}"""), " ")
+                    .replace(SEARCH_PREVIEW_MULTISPACE_REGEX, " ")
                     .trim()
                     .ifBlank { "-" },
                 references = emptyList()

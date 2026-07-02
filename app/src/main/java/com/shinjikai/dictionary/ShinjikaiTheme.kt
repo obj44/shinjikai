@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -164,14 +165,27 @@ private fun androidx.compose.material3.ColorScheme.withShinjikaiBrand(
         onSecondary = baseScheme.onSecondary,
         secondaryContainer = baseScheme.secondaryContainer,
         onSecondaryContainer = baseScheme.onSecondaryContainer,
+        tertiary = baseScheme.tertiary,
+        onTertiary = baseScheme.onTertiary,
+        tertiaryContainer = baseScheme.tertiaryContainer,
+        onTertiaryContainer = baseScheme.onTertiaryContainer,
+        error = baseScheme.error,
+        onError = baseScheme.onError,
+        errorContainer = baseScheme.errorContainer,
+        onErrorContainer = baseScheme.onErrorContainer,
         background = baseScheme.background,
         onBackground = baseScheme.onBackground,
         surface = baseScheme.surface,
         onSurface = baseScheme.onSurface,
         surfaceVariant = baseScheme.surfaceVariant,
         onSurfaceVariant = baseScheme.onSurfaceVariant,
+        inverseSurface = baseScheme.inverseSurface,
+        inverseOnSurface = baseScheme.inverseOnSurface,
+        inversePrimary = baseScheme.inversePrimary,
         outline = baseScheme.outline,
-        outlineVariant = baseScheme.outlineVariant
+        outlineVariant = baseScheme.outlineVariant,
+        surfaceTint = baseScheme.surfaceTint,
+        scrim = baseScheme.scrim
     )
 }
 
@@ -189,6 +203,7 @@ object ShinjikaiUi {
     val CompactShape = RoundedCornerShape(6.dp)
     val PillShape = RoundedCornerShape(999.dp)
     val ScreenPadding = PaddingValues(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 16.dp)
+    val SuccessColor = Color(0xFF1F8A55)
 
     @Composable
     fun cardColors(containerColor: Color = MaterialTheme.colorScheme.surface): CardColors {
@@ -362,4 +377,50 @@ fun ShinjikaiPanel(
         border = border,
         content = content
     )
+}
+
+@Composable
+fun ShinjikaiEmptyState(
+    title: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    message: String? = null
+) {
+    androidx.compose.foundation.layout.Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        if (icon != null) {
+            Surface(
+                shape = ShinjikaiUi.PillShape,
+                color = ShinjikaiUi.panelColor(alpha = 0.28f),
+                border = ShinjikaiUi.cardBorder(alpha = 0.18f)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(14.dp)
+                )
+            }
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+        if (!message.isNullOrBlank()) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = ShinjikaiUi.mutedTextColor(),
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }

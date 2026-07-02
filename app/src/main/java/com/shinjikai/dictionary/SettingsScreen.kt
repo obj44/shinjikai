@@ -638,18 +638,7 @@ private fun OfflineImporterCard(
     onOpenDownloads: () -> Unit
 ) {
     val hasOfflineDictionary = uiState.offlineTermCount > 0
-    val statusColor = when {
-        uiState.isImportingOfflineData -> MaterialTheme.colorScheme.primary
-        uiState.offlineImportError -> MaterialTheme.colorScheme.error
-        hasOfflineDictionary -> Color(0xFF1F8A55)
-        else -> MaterialTheme.colorScheme.tertiary
-    }
-    val statusLabel = when {
-        uiState.isImportingOfflineData -> "جاري الاستيراد"
-        uiState.offlineImportError -> "تحتاج العملية إلى إعادة المحاولة"
-        hasOfflineDictionary -> "جاهز للاستخدام بدون إنترنت"
-        else -> "لم يتم تثبيت القاموس بعد"
-    }
+    val statusUi = offlineImportStatusUi(uiState, hasOfflineDictionary)
     val summaryText = when {
         uiState.isImportingOfflineData ->
             uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline)
@@ -701,8 +690,8 @@ private fun OfflineImporterCard(
                         fontWeight = FontWeight.SemiBold
                     )
                     StatusBadge(
-                        label = statusLabel,
-                        color = statusColor
+                        label = statusUi.label,
+                        color = statusUi.color
                     )
                 }
             }
@@ -828,7 +817,7 @@ private fun offlineImportStatusUi(
         )
         hasOfflineDictionary -> OfflineImportStatusUi(
             label = "جاهز للاستخدام بدون إنترنت",
-            color = Color(0xFF1F8A55)
+            color = ShinjikaiUi.SuccessColor
         )
         else -> OfflineImportStatusUi(
             label = "لم يتم تثبيت القاموس بعد",
@@ -904,7 +893,7 @@ private fun StatusMessage(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    val tint = if (isError) MaterialTheme.colorScheme.error else Color(0xFF1F8A55)
+    val tint = if (isError) MaterialTheme.colorScheme.error else ShinjikaiUi.SuccessColor
     val background = tint.copy(alpha = 0.12f)
     val icon = if (isError) Icons.Filled.ErrorOutline else Icons.Filled.CheckCircle
 

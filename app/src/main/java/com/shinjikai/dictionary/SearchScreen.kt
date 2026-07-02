@@ -243,7 +243,8 @@ fun SearchScreenContent(
                                         }
                                         items(
                                             items = uiState.offlinePreviewItems,
-                                            key = { it.id }
+                                            key = { it.id },
+                                            contentType = { "dictionary-entry" }
                                         ) { item ->
                                             OfflinePreviewCard(
                                                 item = item,
@@ -275,11 +276,10 @@ fun SearchScreenContent(
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    text = stringResource(R.string.search_no_results),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textAlign = TextAlign.Center
+                                ShinjikaiEmptyState(
+                                    title = stringResource(R.string.search_no_results),
+                                    icon = Icons.Default.Search,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                                 if (!useOfflineMode && uiState.activeCategoryId == null) {
                                     LandingSuggestions(
@@ -306,7 +306,8 @@ fun SearchScreenContent(
                             ) {
                                 items(
                                     count = lazyResults.itemCount,
-                                    key = { index -> lazyResults[index]?.id ?: "result-$index" }
+                                    key = { index -> lazyResults[index]?.id ?: "result-$index" },
+                                    contentType = { "dictionary-entry" }
                                 ) { index ->
                                     val item = lazyResults[index] ?: return@items
                                     DictionaryEntryCard(

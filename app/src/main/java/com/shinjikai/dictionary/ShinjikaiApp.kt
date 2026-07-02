@@ -486,21 +486,18 @@ private fun IntroductionScreen(
         listOf(
             OnboardingPage(
                 icon = Icons.Default.Search,
-                accent = Color(0xFF3E7BC1),
                 eyebrowRes = R.string.intro_page_1_eyebrow,
                 titleRes = R.string.intro_page_1_title,
                 bodyRes = R.string.intro_page_1_body
             ),
             OnboardingPage(
                 icon = Icons.AutoMirrored.Filled.MenuBook,
-                accent = Color(0xFF1D8A7A),
                 eyebrowRes = R.string.intro_page_2_eyebrow,
                 titleRes = R.string.intro_page_2_title,
                 bodyRes = R.string.intro_page_2_body
             ),
             OnboardingPage(
                 icon = Icons.Default.DownloadForOffline,
-                accent = Color(0xFF8A63D2),
                 eyebrowRes = R.string.intro_page_3_eyebrow,
                 titleRes = R.string.intro_page_3_title,
                 bodyRes = R.string.intro_page_3_body
@@ -535,7 +532,7 @@ private fun IntroductionScreen(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 4.dp)
             ) { page ->
-                IntroPageCard(page = onboardingPages[page])
+                IntroPageCard(page = onboardingPages[page], accentIndex = page)
             }
 
             Row(
@@ -594,8 +591,19 @@ private fun IntroductionScreen(
 
 @Composable
 private fun IntroPageCard(
-    page: OnboardingPage
+    page: OnboardingPage,
+    accentIndex: Int
 ) {
+    val accentContainer = when (accentIndex % 3) {
+        0 -> MaterialTheme.colorScheme.primaryContainer
+        1 -> MaterialTheme.colorScheme.tertiaryContainer
+        else -> MaterialTheme.colorScheme.secondaryContainer
+    }
+    val accentContent = when (accentIndex % 3) {
+        0 -> MaterialTheme.colorScheme.onPrimaryContainer
+        1 -> MaterialTheme.colorScheme.onTertiaryContainer
+        else -> MaterialTheme.colorScheme.onSecondaryContainer
+    }
     Surface(
         modifier = Modifier
             .fillMaxSize()
@@ -621,13 +629,13 @@ private fun IntroPageCard(
                     modifier = Modifier
                         .size(52.dp)
                         .clip(CircleShape)
-                        .background(page.accent),
+                        .background(accentContainer),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = page.icon,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = accentContent,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -655,7 +663,6 @@ private fun IntroPageCard(
 
 private data class OnboardingPage(
     val icon: ImageVector,
-    val accent: Color,
     val eyebrowRes: Int,
     val titleRes: Int,
     val bodyRes: Int

@@ -1,6 +1,5 @@
 package com.shinjikai.dictionary
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,8 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.shinjikai.dictionary.data.RecentSearchEntry
@@ -55,6 +52,10 @@ fun HistoryScreenContent(
 ) {
     var pendingDeleteTerm by remember { mutableStateOf<String?>(null) }
     var pendingClearAllHistory by remember { mutableStateOf(false) }
+    val locale = Locale.getDefault()
+    val historyDateFormatter = remember(locale) {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, locale)
+    }
 
     Scaffold(
         containerColor = Color.Transparent
@@ -78,11 +79,10 @@ fun HistoryScreenContent(
                             .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = stringResource(R.string.history_empty),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
+                        ShinjikaiEmptyState(
+                            title = stringResource(R.string.history_empty),
+                            icon = Icons.Default.History,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -110,7 +110,11 @@ fun HistoryScreenContent(
                         )
                     }
 
-                    items(uiState.recentSearches, key = { it.term.lowercase(Locale.ROOT) }) { historyEntry ->
+                    items(
+                        items = uiState.recentSearches,
+                        key = { it.term.lowercase(Locale.ROOT) },
+                        contentType = { "history-entry" }
+                    ) { historyEntry ->
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = ShinjikaiUi.CardShape,
@@ -154,7 +158,7 @@ fun HistoryScreenContent(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    formatHistoryDate(historyEntry)?.let { formattedDate ->
+                                    formatHistoryDate(historyEntry, historyDateFormatter)?.let { formattedDate ->
                                         Text(
                                             text = formattedDate,
                                             style = MaterialTheme.typography.bodySmall,
@@ -228,8 +232,10 @@ fun HistoryScreenContent(
     }
 }
 
-private fun formatHistoryDate(historyEntry: RecentSearchEntry): String? {
+private fun formatHistoryDate(
+    historyEntry: RecentSearchEntry,
+    formatter: DateFormat
+): String? {
     val searchedAtEpochMs = historyEntry.searchedAtEpochMs ?: return null
-    val formatter = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
     return formatter.format(Date(searchedAtEpochMs))
 }

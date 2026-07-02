@@ -1,6 +1,5 @@
 package com.shinjikai.dictionary
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +17,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,10 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDirection
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
 import androidx.paging.PagingData
@@ -152,10 +147,10 @@ fun BookmarksScreenContent(
                             .weight(1f),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = stringResource(R.string.bookmarks_empty),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        ShinjikaiEmptyState(
+                            title = stringResource(R.string.bookmarks_empty),
+                            icon = Icons.Default.Bookmark,
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
@@ -183,7 +178,8 @@ fun BookmarksScreenContent(
                 }
                 items(
                     count = bookmarks.itemCount,
-                    key = { index -> bookmarks[index]?.id ?: "bookmark-$index" }
+                    key = { index -> bookmarks[index]?.id ?: "bookmark-$index" },
+                    contentType = { "bookmark-entry" }
                 ) { index ->
                     val bookmark = bookmarks[index] ?: return@items
                     val previous = if (index > 0) bookmarks.peek(index - 1) else null
@@ -203,79 +199,39 @@ fun BookmarksScreenContent(
                             )
                         }
 
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                    .clickable {
-                                        if (uiState.isEditMode) {
-                                            viewModel.toggleBookmarkSelection(bookmark.id)
-                                        } else {
-                                            onOpenBookmarkDetails(item)
-                                        }
-                                    },
-                            shape = ShinjikaiUi.CardShape,
-                            colors = ShinjikaiUi.cardColors(),
-                            border = ShinjikaiUi.cardBorder(alpha = 0.22f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = item.kana,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f)
-                                    )
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = item.primaryWriting.ifBlank { item.kana },
-                                            style = MaterialTheme.typography.headlineMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        CommonnessBadge(difficulty = item.difficulty)
-                                    }
-                                    Text(
-                                        text = forceRtlText(
-                                            if (uiState.useOfflineMode) {
-                                                formatOfflineSearchPreview(item.meaningSummary)
-                                            } else {
-                                                item.meaningSummary
-                                            }
-                                        ),
-                                        style = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Rtl),
-                                        textAlign = TextAlign.Right,
-                                        maxLines = if (uiState.useOfflineMode || uiState.activeCategoryId != null) 1 else Int.MAX_VALUE,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 8.dp)
-                                    )
+                        DictionaryEntryCard(
+                            item = item,
+                            onClick = {
+                                if (uiState.isEditMode) {
+                                    viewModel.toggleBookmarkSelection(bookmark.id)
+                                } else {
+                                    onOpenBookmarkDetails(item)
+                                }
+                            },
+                            previewMaxLines = if (uiState.useOfflineMode || uiState.activeCategoryId != null) 1 else Int.MAX_VALUE,
+                            previewText = if (uiState.useOfflineMode) null else item.meaningSummary,
+                            footer = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(
                                         text = stringResource(R.string.bookmarks_added_at, localTimeLabel(bookmark.createdAt)),
+                                        modifier = Modifier.weight(1f),
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                        textAlign = TextAlign.Right,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(top = 10.dp)
+                                        textAlign = TextAlign.Right
                                     )
-                                }
-
-                                if (uiState.isEditMode) {
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = { viewModel.toggleBookmarkSelection(bookmark.id) }
-                                    )
+                                    if (uiState.isEditMode) {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = { viewModel.toggleBookmarkSelection(bookmark.id) }
+                                        )
+                                    }
                                 }
                             }
-                        }
+                        )
                     }
                 }
                 }

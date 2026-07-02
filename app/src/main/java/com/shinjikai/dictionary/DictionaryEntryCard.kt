@@ -12,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -29,9 +30,15 @@ fun DictionaryEntryCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     previewMaxLines: Int = 2,
+    previewText: String? = null,
     footer: (@Composable () -> Unit)? = null
 ) {
-    val headword = item.primaryWriting.ifBlank { item.kana }.trim()
+    val headword = remember(item.primaryWriting, item.kana) {
+        item.primaryWriting.ifBlank { item.kana }.trim()
+    }
+    val preview = remember(item.meaningSummary, previewText) {
+        previewText ?: formatOfflineSearchPreview(item.meaningSummary)
+    }
     if (headword.isBlank()) return
 
     Surface(
@@ -74,7 +81,6 @@ fun DictionaryEntryCard(
                 }
             }
 
-            val preview = formatOfflineSearchPreview(item.meaningSummary)
             if (preview.isNotBlank()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.34f))
                 Text(

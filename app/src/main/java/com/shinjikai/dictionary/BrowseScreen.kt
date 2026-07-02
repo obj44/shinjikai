@@ -2,13 +2,11 @@ package com.shinjikai.dictionary
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Shuffle
@@ -16,7 +14,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,8 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
 import androidx.paging.PagingData
@@ -68,11 +63,11 @@ fun BrowseScreenContent(
                         FilledTonalIconButton(
                             onClick = { viewModel.openRandomDictionaryEntry(onOpenDetails) }
                         ) {
-                        Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = stringResource(R.string.browse_random)
-                        )
-                    }
+                            Icon(
+                                imageVector = Icons.Default.Shuffle,
+                                contentDescription = stringResource(R.string.browse_random)
+                            )
+                        }
                     }
                 )
             }
@@ -92,14 +87,10 @@ fun BrowseScreenContent(
 
             if (refreshState is LoadState.NotLoading && entries.itemCount == 0) {
                 item(key = "browse-empty") {
-                    Text(
-                        text = stringResource(R.string.browse_empty),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 28.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = ShinjikaiUi.mutedTextColor(),
-                        textAlign = TextAlign.Center
+                    ShinjikaiEmptyState(
+                        title = stringResource(R.string.browse_empty),
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -117,7 +108,8 @@ fun BrowseScreenContent(
 
             items(
                 count = entries.itemCount,
-                key = { index -> entries[index]?.id ?: "browse-$index" }
+                key = { index -> entries[index]?.id ?: "browse-$index" },
+                contentType = { "dictionary-entry" }
             ) { index ->
                 val item = entries[index] ?: return@items
                 DictionaryEntryCard(
