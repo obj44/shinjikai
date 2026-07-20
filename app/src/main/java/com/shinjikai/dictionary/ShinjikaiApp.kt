@@ -414,8 +414,10 @@ fun ShinjikaiApp(
                                 viewModel = viewModel,
                                 onGoBack = { navController.popBackStack() },
                                 onOpenCategorySearch = { categoryId, categoryName ->
-                                    navController.navigateToPrimary(AppRoute.Search)
                                     viewModel.runCategorySearch(categoryId, categoryName)
+                                    navController.navigate(AppRoute.Search.route) {
+                                        launchSingleTop = true
+                                    }
                                 },
                                 onOpenGlossaryReference = { referenceId ->
                                     navController.navigate(buildDetailRoute(referenceId))
@@ -426,10 +428,9 @@ fun ShinjikaiApp(
                                     } else {
                                         val lookupTerm = relatedItem.text.ifBlank { relatedItem.kana }.trim()
                                         if (lookupTerm.isNotBlank()) {
-                                            navController.navigateToPrimary(
-                                                AppRoute.Search,
-                                                buildSearchRoute(lookupTerm)
-                                            )
+                                            navController.navigate(buildSearchRoute(lookupTerm)) {
+                                                launchSingleTop = true
+                                            }
                                         }
                                     }
                                 }

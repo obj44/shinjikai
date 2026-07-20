@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         YomitanTermCategoryEntity::class
     ],
     // Keep this >= the highest version that has ever shipped, otherwise existing installs may crash on downgrade.
-    version = 10,
+    version = 9,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -225,14 +225,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private val MIGRATION_9_10 = object : Migration(9, 10) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "CREATE INDEX IF NOT EXISTS index_yomitan_terms_browse ON yomitan_terms(reading, expression, id)"
-                )
-            }
-        }
-
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -251,8 +243,7 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9,
-                        MIGRATION_9_10
+                        MIGRATION_8_9
                     )
                     .build()
                     .also { INSTANCE = it }
@@ -303,18 +294,14 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("CREATE INDEX IF NOT EXISTS index_yomitan_terms_expression ON yomitan_terms(expression)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_yomitan_terms_reading ON yomitan_terms(reading)")
             db.execSQL(
-                "CREATE INDEX IF NOT EXISTS index_yomitan_terms_browse ON yomitan_terms(reading, expression, id)"
-            )
-            db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_yomitan_term_categories_categoryId ON yomitan_term_categories(categoryId)"
             )
             db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_yomitan_term_categories_termId ON yomitan_term_categories(termId)"
             )
 
-            db.execSQL(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS yomitan_terms_fts USING fts4(expression, reading, glossary)"
-            )
+            db.execSQL("DROP TABLE IF EXISTS yomitan_terms_fts")
+            db.execSQL("CREATE VIRTUAL TABLE yomitan_terms_fts USING fts4(expression, reading, glossary)")
         }
 
         private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {
