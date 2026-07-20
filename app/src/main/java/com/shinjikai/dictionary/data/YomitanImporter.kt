@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
+private val YOMITAN_DEFINITION_MULTISPACE_REGEX = Regex("""\s{2,}""")
+
 class YomitanImporter(
     private val database: AppDatabase
 ) {
@@ -254,7 +256,7 @@ class YomitanImporter(
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .joinToString(separator = "\n")
-            .replace(Regex("""\s{2,}"""), " ")
+            .replace(YOMITAN_DEFINITION_MULTISPACE_REGEX, " ")
             .trim()
     }
 

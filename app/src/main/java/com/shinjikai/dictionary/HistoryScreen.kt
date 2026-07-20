@@ -1,6 +1,6 @@
 package com.shinjikai.dictionary
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ClearAll
 import androidx.compose.material.icons.filled.DeleteOutline
@@ -27,7 +26,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,8 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.shinjikai.dictionary.data.RecentSearchEntry
@@ -49,7 +45,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 fun HistoryScreenContent(
     uiState: SearchUiState,
     viewModel: ShinjikaiViewModel,
@@ -57,75 +53,54 @@ fun HistoryScreenContent(
 ) {
     var pendingDeleteTerm by remember { mutableStateOf<String?>(null) }
     var pendingClearAllHistory by remember { mutableStateOf(false) }
+    val locale = Locale.getDefault()
+    val historyDateFormatter = remember(locale) {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, locale)
+    }
 
     Scaffold(
-        containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.history_title)) }
-            )
-        }
+        containerColor = Color.Transparent
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             if (uiState.recentSearches.isEmpty()) {
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.Center
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.history_empty),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                        textAlign = TextAlign.Center
+                    ShinjikaiPageHeader(
+                        title = stringResource(R.string.history_title),
+                        subtitle = stringResource(R.string.search_recent_subtitle),
+                        icon = Icons.Default.History
                     )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        ShinjikaiEmptyState(
+                            title = stringResource(R.string.history_empty),
+                            icon = Icons.Default.History,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             } else {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(horizontal = 16.dp, vertical = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     item(key = "history-header") {
-                        Surface(
-                            shape = RoundedCornerShape(22.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                Color.White.copy(alpha = 0.14f)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.History,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.search_recent_title),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.search_recent_subtitle),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.64f)
-                                    )
-                                }
+                        ShinjikaiPageHeader(
+                            title = stringResource(R.string.history_title),
+                            subtitle = stringResource(R.string.search_recent_subtitle),
+                            icon = Icons.Default.History,
+                            action = {
                                 IconButton(onClick = { pendingClearAllHistory = true }) {
                                     Icon(
                                         imageVector = Icons.Default.ClearAll,
@@ -133,15 +108,22 @@ fun HistoryScreenContent(
                                     )
                                 }
                             }
-                        }
+                        )
                     }
 
-                    items(uiState.recentSearches, key = { it.term.lowercase(Locale.ROOT) }) { historyEntry ->
+                    items(
+                        items = uiState.recentSearches,
+                        key = { it.term.lowercase(Locale.ROOT) },
+                        contentType = { "history-entry" }
+                    ) { historyEntry ->
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
+                            modifier = Modifier
+                                .animateItemPlacement()
+                                .fillMaxWidth(),
+                            shape = ShinjikaiUi.CardShape,
                             color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 1.dp
+                            border = ShinjikaiUi.cardBorder(alpha = 0.22f),
+                            tonalElevation = 0.dp
                         ) {
                             Row(
                                 modifier = Modifier
@@ -155,7 +137,7 @@ fun HistoryScreenContent(
                             ) {
                                 Surface(
                                     shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                    color = ShinjikaiUi.panelColor(alpha = 0.42f)
                                 ) {
                                     Box(
                                         modifier = Modifier.padding(8.dp),
@@ -179,7 +161,7 @@ fun HistoryScreenContent(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    formatHistoryDate(historyEntry)?.let { formattedDate ->
+                                    formatHistoryDate(historyEntry, historyDateFormatter)?.let { formattedDate ->
                                         Text(
                                             text = formattedDate,
                                             style = MaterialTheme.typography.bodySmall,
@@ -253,8 +235,10 @@ fun HistoryScreenContent(
     }
 }
 
-private fun formatHistoryDate(historyEntry: RecentSearchEntry): String? {
+private fun formatHistoryDate(
+    historyEntry: RecentSearchEntry,
+    formatter: DateFormat
+): String? {
     val searchedAtEpochMs = historyEntry.searchedAtEpochMs ?: return null
-    val formatter = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
     return formatter.format(Date(searchedAtEpochMs))
 }

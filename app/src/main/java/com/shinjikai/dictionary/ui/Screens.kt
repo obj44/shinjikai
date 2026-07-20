@@ -4,6 +4,7 @@ import android.net.Uri
 
 enum class Screen {
     Search,
+    Browse,
     History,
     Detail,
     Bookmarks,
@@ -19,6 +20,7 @@ enum class DetailSource(val value: String) {
 
 enum class AppRoute(val route: String, val screen: Screen) {
     Search("search", Screen.Search),
+    Browse("browse", Screen.Browse),
     History("history", Screen.History),
     Detail("detail", Screen.Detail),
     Bookmarks("bookmarks", Screen.Bookmarks),
@@ -38,6 +40,7 @@ fun String?.toScreen(): Screen {
         this == null -> Screen.Search
         this.startsWith(AppRoute.Detail.route) -> Screen.Detail
         this.startsWith(AppRoute.Search.route) -> Screen.Search
+        this.startsWith(AppRoute.Browse.route) -> Screen.Browse
         else -> AppRoute.entries.firstOrNull { it.route == this }?.screen ?: Screen.Search
     }
 }

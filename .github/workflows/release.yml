@@ -1,0 +1,78 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish, for example v1.4"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Test and build installable APK
+        run: ./gradlew :app:testDebugUnitTest :app:assembleRelease --console=plain
+
+      - name: Prepare release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            release_tag="${{ inputs.tag }}"
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+          mkdir -p dist
+          built_apk="$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | sort | head -n 1)"
+          if [[ -z "$built_apk" ]]; then
+            echo "No release APK was produced." >&2
+            exit 1
+          fi
+          cp "$built_apk" "dist/shinjikai-${release_tag}.apk"
+          {
+            echo "RELEASE_TAG=${release_tag}"
+            echo "APK_PATH=dist/shinjikai-${release_tag}.apk"
+          } >> "$GITHUB_ENV"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shinjikai-${{ env.RELEASE_TAG }}-apk
+          path: ${{ env.APK_PATH }}
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="Installable, optimized APK built by GitHub Actions. This build bundles the local Japanese-Arabic dictionary data and images."
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$APK_PATH" --clobber
+          else
+            gh release create "$RELEASE_TAG" "$APK_PATH" --title "Shinjikai $RELEASE_TAG" --notes "$notes"
+          fi

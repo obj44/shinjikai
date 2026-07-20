@@ -24,6 +24,7 @@ class SettingsStore(
     private val isUpdatedInstall by lazy(LazyThreadSafetyMode.NONE) { hasAppBeenUpdatedSinceInstall() }
 
     private object Keys {
+        val THEME_MODE = stringPreferencesKey("theme_mode")
         val DARK_MODE = booleanPreferencesKey("dark_mode")
         val USE_DYNAMIC_COLOR = booleanPreferencesKey("use_dynamic_color")
         val USE_OFFLINE_MODE = booleanPreferencesKey("use_offline_mode")
@@ -37,9 +38,9 @@ class SettingsStore(
      */
     fun readCached(): AppSettings {
         return AppSettings(
-            darkMode = cachePrefs.getBoolean("dark_mode", false),
-            useDynamicColor = cachePrefs.getBoolean("use_dynamic_color", true),
-            useOfflineMode = cachePrefs.getBoolean("use_offline_mode", false),
+            themeMode = readCachedThemeMode(),
+            useDynamicColor = cachePrefs.getBoolean("use_dynamic_color", false),
+            useOfflineMode = true,
             hasSeenIntroduction = resolveHasSeenIntroduction(
                 legacySeen = cachePrefs.getBoolean("has_seen_introduction", false)
             ),
@@ -55,9 +56,12 @@ class SettingsStore(
         }
         .map { prefs ->
             AppSettings(
-                darkMode = prefs[Keys.DARK_MODE] ?: false,
-                useDynamicColor = prefs[Keys.USE_DYNAMIC_COLOR] ?: true,
-                useOfflineMode = prefs[Keys.USE_OFFLINE_MODE] ?: false,
+                themeMode = readThemeMode(
+                    storedMode = prefs[Keys.THEME_MODE],
+                    legacyDarkMode = prefs[Keys.DARK_MODE]
+                ),
+                useDynamicColor = prefs[Keys.USE_DYNAMIC_COLOR] ?: false,
+                useOfflineMode = true,
                 hasSeenIntroduction = resolveHasSeenIntroduction(
                     legacySeen = prefs[Keys.HAS_SEEN_INTRODUCTION] ?: false
                 ),
@@ -67,9 +71,10 @@ class SettingsStore(
         .onEach { settings ->
             // Keep the synchronous startup cache in sync even if settings were set before this cache existed.
             cachePrefs.edit()
-                .putBoolean("dark_mode", settings.darkMode)
+                .putString("theme_mode", settings.themeMode.storageKey)
+                .putBoolean("dark_mode", settings.themeMode == AppThemeMode.Dark)
                 .putBoolean("use_dynamic_color", settings.useDynamicColor)
-                .putBoolean("use_offline_mode", settings.useOfflineMode)
+                .putBoolean("use_offline_mode", true)
                 .putBoolean("has_seen_introduction", settings.hasSeenIntroduction)
                 .putString("selected_anki_deck_name", settings.selectedAnkiDeckName)
                 .apply()
@@ -77,8 +82,18 @@ class SettingsStore(
         }
 
     suspend fun setDarkMode(enabled: Boolean) {
-        context.settingsDataStore.edit { prefs -> prefs[Keys.DARK_MODE] = enabled }
-        cachePrefs.edit().putBoolean("dark_mode", enabled).apply()
+        setThemeMode(if (enabled) AppThemeMode.Dark else AppThemeMode.Light)
+    }
+
+    suspend fun setThemeMode(mode: AppThemeMode) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.THEME_MODE] = mode.storageKey
+            prefs[Keys.DARK_MODE] = mode == AppThemeMode.Dark
+        }
+        cachePrefs.edit()
+            .putString("theme_mode", mode.storageKey)
+            .putBoolean("dark_mode", mode == AppThemeMode.Dark)
+            .apply()
     }
 
     suspend fun setUseDynamicColor(enabled: Boolean) {
@@ -86,9 +101,9 @@ class SettingsStore(
         cachePrefs.edit().putBoolean("use_dynamic_color", enabled).apply()
     }
 
-    suspend fun setUseOfflineMode(enabled: Boolean) {
-        context.settingsDataStore.edit { prefs -> prefs[Keys.USE_OFFLINE_MODE] = enabled }
-        cachePrefs.edit().putBoolean("use_offline_mode", enabled).apply()
+    suspend fun ensureOfflineMode() {
+        context.settingsDataStore.edit { prefs -> prefs[Keys.USE_OFFLINE_MODE] = true }
+        cachePrefs.edit().putBoolean("use_offline_mode", true).apply()
     }
 
     suspend fun setHasSeenIntroduction(seen: Boolean) {
@@ -128,5 +143,17 @@ class SettingsStore(
     private fun hasAppBeenUpdatedSinceInstall(): Boolean {
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         return packageInfo.lastUpdateTime > packageInfo.firstInstallTime
+    }
+
+    private fun readCachedThemeMode(): AppThemeMode {
+        return readThemeMode(
+            storedMode = cachePrefs.getString("theme_mode", null),
+            legacyDarkMode = cachePrefs.getBoolean("dark_mode", true)
+        )
+    }
+
+    private fun readThemeMode(storedMode: String?, legacyDarkMode: Boolean?): AppThemeMode {
+        return AppThemeMode.fromStorageKey(storedMode)
+            ?: if (legacyDarkMode != false) AppThemeMode.Dark else AppThemeMode.Light
     }
 }

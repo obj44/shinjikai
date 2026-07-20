@@ -33,7 +33,14 @@ data class SearchItem(
 }
 
 data class Writing(
-    @SerializedName("Text") val text: String = ""
+    @SerializedName("Text") val text: String = "",
+    @SerializedName("Class") val writingClass: Int = 0,
+    @SerializedName("Parts") val parts: List<WritingPart>? = emptyList()
+)
+
+data class WritingPart(
+    @SerializedName("Kanji") val kanji: Int = 0,
+    @SerializedName("Reading") val reading: String = ""
 )
 
 data class IdRequest(
@@ -43,7 +50,10 @@ data class IdRequest(
 data class WordDetailsResponse(
     @SerializedName("Word") val word: WordDetailsWord,
     @SerializedName("SimilarWords") val similarWords: List<WordRef> = emptyList(),
-    @SerializedName("SentenceSearch") val sentenceSearch: List<SentenceExample> = emptyList()
+    @SerializedName("SentenceSearch") val sentenceSearch: List<SentenceExample> = emptyList(),
+    @SerializedName("SentenceMap") val sentenceMap: Map<String, SentenceExample>? = emptyMap(),
+    @SerializedName("Homophones") val homophones: List<WordRef>? = emptyList(),
+    @SerializedName("Kanjis") val kanjis: List<KanjiInfo>? = emptyList()
 )
 
 data class WordDetailsWord(
@@ -53,7 +63,9 @@ data class WordDetailsWord(
     @SerializedName("Meanings") val meanings: List<Meaning> = emptyList(),
     @SerializedName("JLPT") val jlpt: Int = 0,
     @SerializedName("Difficulty") val difficulty: Int = 0,
-    @SerializedName("CategoryIds") val categoryIds: List<Int> = emptyList()
+    @SerializedName("CategoryIds") val categoryIds: List<Int> = emptyList(),
+    @SerializedName("Pictures") val pictures: List<JsonElement>? = emptyList(),
+    @SerializedName("SentenceIds") val sentenceIds: List<Int>? = emptyList()
 )
 
 data class WordRef(
@@ -68,6 +80,9 @@ data class WordRef(
 data class Meaning(
     @SerializedName("Arabic") val arabic: String = "",
     @SerializedName("Note") val note: String = "",
+    @SerializedName("Japanese") val japanese: String? = "",
+    @SerializedName("Source") val source: String? = "",
+    @SerializedName("SentenceIds") val sentenceIds: List<Int>? = emptyList(),
     @SerializedName("Related") val related: List<RelatedGroup> = emptyList(),
     // The API sometimes returns pictures as strings and sometimes as objects; keep it flexible to avoid breaking parsing.
     // Example crash: "Expected a string but was BEGIN_OBJECT at $.Word.Meanings[0].Pictures[0]".
@@ -114,7 +129,24 @@ data class SentenceExample(
     @SerializedName("Id") val id: Int = 0,
     @SerializedName("Text") val text: String = "",
     @SerializedName("Kana") val kana: String = "",
-    @SerializedName("Arabic") val arabic: String = ""
+    @SerializedName("Arabic") val arabic: String = "",
+    @SerializedName("WordLinks") val wordLinks: List<SentenceWordLink>? = emptyList()
+)
+
+data class SentenceWordLink(
+    @SerializedName("Start") val start: Int = 0,
+    @SerializedName("End") val end: Int = 0,
+    @SerializedName("WordId") val wordId: Int = 0,
+    @SerializedName("Text") val text: String = "",
+    @SerializedName("Kana") val kana: String = ""
+)
+
+data class KanjiInfo(
+    @SerializedName("Character") val character: Int = 0,
+    @SerializedName("OnYomi") val onYomi: String = "",
+    @SerializedName("KunYomi") val kunYomi: String = "",
+    @SerializedName("Meaning") val meaning: String = "",
+    @SerializedName("Class") val kanjiClass: Int = 0
 )
 
 data class LoadCategoriesResponse(

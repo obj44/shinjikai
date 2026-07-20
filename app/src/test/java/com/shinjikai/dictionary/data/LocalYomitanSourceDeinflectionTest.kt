@@ -93,28 +93,54 @@ class LocalYomitanSourceDeinflectionTest {
         assertTrue(dao.ftsQueries.isNotEmpty())
     }
 
+    @Test
+    fun `deinflector follows yomitan japanese transform chains`() {
+        val cases = mapOf(
+            "食べさせられなかった" to "食べる",
+            "愛しくありませんでした" to "愛しい",
+            "読んでいる" to "読む",
+            "いらっしゃいます" to "いらっしゃる",
+            "行かなかった" to "行く"
+        )
+
+        for ((inflected, dictionaryForm) in cases) {
+            val candidates = JapaneseDeinflector.generateCandidates(inflected)
+
+            assertTrue("$inflected should deinflect to $dictionaryForm", candidates.contains(dictionaryForm))
+        }
+    }
+
     private class FakeYomitanDao : YomitanDao {
-        var ftsResults: List<YomitanTermEntity> = emptyList()
+        var ftsResults: List<YomitanTermListRow> = emptyList()
         val ftsQueries = mutableListOf<String>()
 
-        override suspend fun search(term: String, prefix: String, limit: Int): List<YomitanTermEntity> = emptyList()
+        override suspend fun search(term: String, prefix: String, limit: Int): List<YomitanTermListRow> = emptyList()
 
-        override suspend fun searchPaged(term: String, prefix: String, limit: Int, offset: Int): List<YomitanTermEntity> = emptyList()
+        override suspend fun searchPaged(term: String, prefix: String, limit: Int, offset: Int): List<YomitanTermListRow> = emptyList()
 
-        override suspend fun searchFts(matchQuery: String, limit: Int): List<YomitanTermEntity> {
+        override suspend fun searchFts(matchQuery: String, limit: Int): List<YomitanTermListRow> {
             ftsQueries += matchQuery
             return ftsResults.take(limit)
         }
 
-        override suspend fun searchGlossaryFts(matchQuery: String, limit: Int): List<YomitanTermEntity> = emptyList()
+        override suspend fun searchGlossaryFts(matchQuery: String, limit: Int): List<YomitanTermListRow> = emptyList()
 
-        override suspend fun searchArabic(term: String, normalizedTerm: String, limit: Int): List<YomitanTermEntity> = emptyList()
+        override suspend fun searchArabic(term: String, normalizedTerm: String, limit: Int): List<YomitanTermListRow> = emptyList()
 
         override suspend fun countSearchMatches(term: String): Int = 0
 
         override suspend fun getById(id: Int): YomitanTermEntity? = null
 
+        override suspend fun getByIds(ids: List<Int>): List<YomitanTermListRow> = emptyList()
+
         override suspend fun loadAllTerms(): List<YomitanTermEntity> = emptyList()
+
+        override suspend fun browseTermsAfter(
+            lastReading: String?,
+            lastExpression: String?,
+            lastId: Int?,
+            limit: Int
+        ): List<YomitanTermListRow> = emptyList()
 
         override suspend fun upsertCategoryRefs(items: List<YomitanTermCategoryEntity>) = Unit
 
@@ -122,7 +148,7 @@ class LocalYomitanSourceDeinflectionTest {
 
         override suspend fun countCategoryRefs(): Int = 0
 
-        override suspend fun loadCategoryTermsPaged(categoryId: Int, limit: Int, offset: Int): List<YomitanTermEntity> = emptyList()
+        override suspend fun loadCategoryTermsPaged(categoryId: Int, limit: Int, offset: Int): List<YomitanTermListRow> = emptyList()
 
         override suspend fun countCategoryTerms(categoryId: Int): Int = 0
 
@@ -136,7 +162,9 @@ class LocalYomitanSourceDeinflectionTest {
 
         override suspend fun countTerms(): Int = 0
 
-        override suspend fun loadPreviewTerms(limit: Int): List<YomitanTermEntity> = emptyList()
+        override suspend fun loadPreviewTerms(limit: Int): List<YomitanTermListRow> = emptyList()
+
+        override suspend fun loadRandomTerm(): YomitanTermListRow? = null
 
         override suspend fun upsertMeta(meta: YomitanMetaEntity) = Unit
 
@@ -151,7 +179,7 @@ class LocalYomitanSourceDeinflectionTest {
             expression: String,
             reading: String = expression,
             glossary: String
-        ) = YomitanTermEntity(
+        ) = YomitanTermListRow(
             id = id,
             expression = expression,
             reading = reading,

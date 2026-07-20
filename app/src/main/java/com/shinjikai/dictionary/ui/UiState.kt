@@ -12,7 +12,12 @@ data class SearchUiState(
     val activeCategoryName: String? = null,
     val resultMode: ResultMode = ResultMode.None,
     val recentSearches: List<RecentSearchEntry> = emptyList(),
-    val offlinePreviewItems: List<SearchItem> = emptyList()
+    val offlinePreviewItems: List<SearchItem> = emptyList(),
+    val isImportingOfflineData: Boolean = false,
+    val offlineImportError: Boolean = false,
+    val offlineImportStatus: String? = null,
+    val offlineImportPhase: String? = null,
+    val offlineTermCount: Int = 0
 )
 
 data class DetailUiState(
@@ -21,7 +26,9 @@ data class DetailUiState(
     val details: WordDetailsResponse? = null,
     val selectedItem: SearchItem? = null,
     val isBookmarked: Boolean = false,
-    val categoryNameById: Map<Int, String> = emptyMap()
+    val categoryNameById: Map<Int, String> = emptyMap(),
+    val isImportingOfflineData: Boolean = false,
+    val offlineImportPhase: String? = null
 )
 
 data class BookmarksUiState(

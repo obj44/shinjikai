@@ -1,11 +1,16 @@
 package com.shinjikai.dictionary
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
@@ -21,8 +26,10 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.shinjikai.dictionary.ui.Screen
@@ -31,6 +38,7 @@ import com.shinjikai.dictionary.ui.Screen
 fun PrimaryBottomBar(
     currentScreen: Screen,
     onSearchClick: () -> Unit,
+    onBrowseClick: () -> Unit,
     onHistoryClick: () -> Unit,
     onBookmarksClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -39,25 +47,25 @@ fun PrimaryBottomBar(
     val itemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.primary,
         selectedTextColor = MaterialTheme.colorScheme.primary,
-        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        indicatorColor = Color.Transparent,
         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
     )
 
     Surface(
         modifier = modifier,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
-        shadowElevation = 6.dp,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp,
         tonalElevation = 0.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             HorizontalDivider(
                 thickness = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                color = MaterialTheme.colorScheme.outlineVariant
             )
             NavigationBar(
                 modifier = Modifier.fillMaxWidth(),
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+                containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 tonalElevation = 0.dp,
                 windowInsets = NavigationBarDefaults.windowInsets
@@ -73,6 +81,19 @@ fun PrimaryBottomBar(
                         )
                     },
                     label = stringResource(R.string.nav_search),
+                    colors = itemColors
+                )
+                BottomBarItem(
+                    selected = currentScreen == Screen.Browse,
+                    onClick = onBrowseClick,
+                    icon = { modifier ->
+                        Icon(
+                            Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = stringResource(R.string.nav_browse),
+                            modifier = modifier
+                        )
+                    },
+                    label = stringResource(R.string.nav_browse),
                     colors = itemColors
                 )
                 BottomBarItem(
@@ -127,23 +148,38 @@ private fun RowScope.BottomBarItem(
     label: String,
     colors: NavigationBarItemColors
 ) {
-    val iconScale = animateFloatAsState(
-        targetValue = if (selected) 1.08f else 1f,
-        animationSpec = spring(stiffness = 450f, dampingRatio = 0.88f),
-        label = "bottomBarIconScale"
+    val indicatorColor by animateColorAsState(
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        label = "bottom-bar-indicator"
     )
 
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
-        icon = { icon(Modifier.scale(iconScale.value)) },
+        icon = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(22.dp)
+                        .height(2.dp)
+                        .background(
+                            color = indicatorColor,
+                            shape = ShinjikaiUi.PillShape
+                        )
+                )
+                icon(Modifier)
+            }
+        },
         label = {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall
             )
         },
-        alwaysShowLabel = true,
+        alwaysShowLabel = selected,
         colors = colors
     )
 }

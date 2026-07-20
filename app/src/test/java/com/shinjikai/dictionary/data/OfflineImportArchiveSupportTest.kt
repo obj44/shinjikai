@@ -9,6 +9,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -114,6 +115,37 @@ class OfflineImportArchiveSupportTest {
         assertTrue(payload.jsonlFile!!.readText().contains("cat"))
         assertEquals("yomitan_images", payload.extractedImagesDir!!.name)
         assertTrue(File(payload.extractedImagesDir, "cat.png").exists())
+    }
+
+    @Test
+    fun `archive entries cannot escape into a sibling with the same path prefix`() {
+        val root = temp.newFolder("safe-root")
+
+        try {
+            safeResolveArchiveEntry(root, "../safe-root-escape/payload.txt")
+            fail("Expected sibling-prefix traversal to be rejected.")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message.orEmpty().contains("Invalid archive entry path"))
+        }
+    }
+
+    @Test
+    fun `staged image replacement preserves a complete directory`() {
+        val parent = temp.newFolder("atomic-images")
+        val target = File(parent, "yomitan_images").apply {
+            mkdirs()
+            resolve("old.png").writeText("old")
+        }
+        val source = temp.newFolder("new-images").apply {
+            resolve("new.png").writeText("new")
+        }
+
+        val staging = stageDirectoryCopy(source, target)
+        replaceStagedDirectoryAtomically(staging, target)
+
+        assertTrue(File(target, "new.png").exists())
+        assertTrue(!File(target, "old.png").exists())
+        assertTrue(!File(parent, ".yomitan_images.backup").exists())
     }
 
     private fun writeZip(archive: File, entries: Map<String, ByteArray>) {

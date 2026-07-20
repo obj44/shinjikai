@@ -14,8 +14,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        processTextQuery = extractProcessTextQuery(intent)
-        externalDeepLink = extractDeepLink(intent)
+        consumeIncomingIntent(intent)
         setContent {
             ShinjikaiApp(
                 externalSearchTerm = processTextQuery,
@@ -28,9 +27,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
+        consumeIncomingIntent(intent)
+    }
+
+    private fun consumeIncomingIntent(intent: Intent?) {
         processTextQuery = extractProcessTextQuery(intent)
         externalDeepLink = extractDeepLink(intent)
+        setIntent(
+            if (processTextQuery != null || externalDeepLink != null) {
+                Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN)
+            } else {
+                intent ?: Intent(this, MainActivity::class.java).setAction(Intent.ACTION_MAIN)
+            }
+        )
     }
 
     private fun extractProcessTextQuery(intent: Intent?): String? {

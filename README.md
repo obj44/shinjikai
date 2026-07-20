@@ -57,17 +57,28 @@ Request headers include `X-Client-Id` as required by the backend.
 
 ## ⚙️ Notes
 
-- Search currently uses default API mode (`Mode = 0`).
-- Some fields, such as related links and categories, depend on API data availability per word.
-- In offline mode, data comes from the local imported dictionary and may differ from online details.
+- Search runs locally against the bundled/imported Room FTS dictionary.
+- Some fields, such as related links and categories, depend on bundled data availability per word.
+- If no bundled assets are present, import a supported dictionary archive from the local dictionary settings screen.
 
 ## 🗂️ Project Structure
 
 - `app/src/main/java/com/shinjikai/dictionary/` -> UI and app flow
-- `app/src/main/java/com/shinjikai/dictionary/data/` -> API models, repository, Room, and offline source
+- `app/src/main/java/com/shinjikai/dictionary/data/` -> API models, repository, bundled importer, Room, and offline source
 - `app/src/main/res/` -> resources (strings, themes, icons, fonts)
 
 ## 🙌 Credits
 
-- Dictionary data and API: **Shinjikai** (`https://shinjikai.app`)
+- Dictionary data: **1Selxo/Shinjikai** (`https://github.com/1Selxo/Shinjikai`)
+- Japanese deinflection transforms: **Yomitan** (`https://github.com/yomidevs/yomitan/tree/master/ext/js/language/ja`), GPL-3.0-or-later.
 - The default offline source archive URL points to the `a-hamdi/japanesearabic` dataset used by the app importer.
+
+## Bundled Dictionary Assets
+
+The app ships the `1Selxo/Shinjikai` dictionary locally instead of using the Shinjikai API. Run:
+
+```powershell
+.\scripts\fetch-bundled-dictionary.ps1
+```
+
+The script downloads `1Selxo/Shinjikai`, writes the data into `app/src/main/assets/bundled_dictionary/`, compresses `data_*.jsonl` as `.jsonl.xz`, recompresses images when it can make them smaller, and stores images as git-safe chunked `tar.xz` assets. On first launch the app imports the bundled JSONL into Room/FTS, extracts the bundled images into app storage, then all lookups run locally against SQLite indexes.

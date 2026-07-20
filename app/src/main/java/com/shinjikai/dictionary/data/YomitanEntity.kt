@@ -10,7 +10,8 @@ import androidx.room.PrimaryKey
     tableName = "yomitan_terms",
     indices = [
         Index(value = ["expression"]),
-        Index(value = ["reading"])
+        Index(value = ["reading"]),
+        Index(value = ["reading", "expression", "id"], name = "index_yomitan_terms_browse")
     ]
 )
 data class YomitanTermEntity(
@@ -22,6 +23,14 @@ data class YomitanTermEntity(
     val note: String = "",
     val source: String = "yomitan",
     val detailsJson: String? = null
+)
+
+data class YomitanTermListRow(
+    val id: Int,
+    val expression: String,
+    val reading: String,
+    val glossary: String,
+    val difficulty: Int = 0
 )
 
 @Fts4

@@ -4,10 +4,18 @@ import androidx.room.withTransaction
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import java.io.File
+import java.io.InputStream
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+
+private val RAW_SHINJIKAI_WHITESPACE_REGEX = Regex("""\s+""")
+
+internal data class JsonLineInput(
+    val label: String,
+    val openStream: () -> InputStream
+)
 
 class RawShinjikaiImporter(
     private val database: AppDatabase,
@@ -19,10 +27,39 @@ class RawShinjikaiImporter(
         jsonlFile: File,
         sourceLabel: String = "raw-shinjikai-jsonl"
     ): Result<Int> {
+        require(jsonlFile.exists()) { "Offline source file was not found." }
+        require(jsonlFile.isFile) { "Offline source path is not a file." }
+
+        return importFromJsonLineStreams(
+            sources = listOf(JsonLineInput(jsonlFile.name) { jsonlFile.inputStream() }),
+            sourceLabel = sourceLabel
+        )
+    }
+
+    internal suspend fun importFromJsonLineFiles(
+        jsonlFiles: List<File>,
+        sourceLabel: String = "raw-shinjikai-jsonl"
+    ): Result<Int> {
+        require(jsonlFiles.isNotEmpty()) { "Offline source files were not found." }
+        jsonlFiles.forEach { file ->
+            require(file.exists()) { "Offline source file was not found: ${file.name}" }
+            require(file.isFile) { "Offline source path is not a file: ${file.name}" }
+        }
+
+        return importFromJsonLineStreams(
+            sources = jsonlFiles.map { file -> JsonLineInput(file.name) { file.inputStream() } },
+            sourceLabel = sourceLabel
+        )
+    }
+
+    internal suspend fun importFromJsonLineStreams(
+        sources: List<JsonLineInput>,
+        sourceLabel: String = "raw-shinjikai-jsonl",
+        offlineImageRoot: String? = null
+    ): Result<Int> {
         return runCatching {
             withContext(Dispatchers.IO) {
-                require(jsonlFile.exists()) { "Offline source file was not found." }
-                require(jsonlFile.isFile) { "Offline source path is not a file." }
+                require(sources.isNotEmpty()) { "Offline source files were not found." }
 
                 AppDatabase.repairOfflineDictionarySchema(database.openHelper.writableDatabase)
 
@@ -36,65 +73,78 @@ class RawShinjikaiImporter(
                     yomitanDao.clearTerms()
                     yomitanDao.clearCategoryRefs()
 
-                    jsonlFile.bufferedReader(Charsets.UTF_8).useLines { lines ->
-                        lines.forEach { rawLine ->
-                            coroutineContext.ensureActive()
-                            val line = rawLine.trim()
-                            if (line.isEmpty()) return@forEach
+                    sources.forEach { source ->
+                        source.openStream().bufferedReader(Charsets.UTF_8).use { reader ->
+                            while (true) {
+                                coroutineContext.ensureActive()
+                                val rawLine = reader.readLine() ?: break
+                                val line = rawLine.trim()
+                                if (line.isEmpty()) continue
 
-                            val record = gson.fromJson(line, RawShinjikaiRecord::class.java) ?: return@forEach
-                            val word = record.word ?: return@forEach
-                            val id = word.id
-                            if (id <= 0) return@forEach
+                                val record = gson.fromJson(line, RawShinjikaiRecord::class.java) ?: continue
+                                val word = record.word ?: continue
+                                val id = word.id
+                                if (id <= 0) continue
 
-                            record.categories.forEach { category ->
-                                if (category.id > 0 && category.name.isNotBlank()) {
-                                    categoriesById.putIfAbsent(category.id, category)
-                                    categoryBuffer.add(
-                                        YomitanTermCategoryEntity(
-                                            termId = id,
-                                            categoryId = category.id
+                                val normalizedWord = word.copy(
+                                    pictures = word.pictures.orEmpty()
+                                        .mapNotNull(::normalizeStoredPictureElement),
+                                    meanings = word.meanings.map { meaning ->
+                                        meaning.copy(
+                                            pictures = meaning.pictures.mapNotNull(::normalizeStoredPictureElement)
                                         )
-                                    )
-                                }
-                            }
-
-                            val normalizedWord = word.copy(
-                                meanings = word.meanings.map { meaning ->
-                                    meaning.copy(
-                                        pictures = meaning.pictures.mapNotNull(::normalizeStoredPictureElement)
-                                    )
-                                }
-                            )
-
-
-                            val details = WordDetailsResponse(
-                                word = normalizedWord,
-                                similarWords = record.similarWords.map {
-                                    WordRef(id = it.id, kana = it.kana, writings = it.writings)
-                                },
-                                sentenceSearch = record.sentenceSearch
-                            )
-
-                            buffer.add(
-                                YomitanTermEntity(
-                                    id = id,
-                                    expression = normalizedWord.writings.firstOrNull()?.text?.trim()
-                                        .orEmpty()
-                                        .ifBlank { normalizedWord.kana.trim() },
-                                    reading = normalizedWord.kana.trim()
-                                        .ifBlank { normalizedWord.writings.firstOrNull()?.text?.trim().orEmpty() },
-                                    glossary = buildMeaningSummary(normalizedWord.meanings).ifBlank { "-" },
-                                    difficulty = normalizedWord.difficulty,
-                                    note = normalizedWord.meanings.firstOrNull()?.note.orEmpty().trim(),
-                                    source = sourceLabel,
-                                    detailsJson = gson.toJson(details)
+                                    }
                                 )
-                            )
-                            importedCount += 1
+                                val expression = normalizedWord.writings.firstOrNull()
+                                    ?.text
+                                    ?.trim()
+                                    .orEmpty()
+                                    .ifBlank { normalizedWord.kana.trim() }
+                                val reading = normalizedWord.kana.trim().ifBlank { expression }
+                                if (!hasDictionaryHeadword(expression, reading)) continue
 
-                            if (buffer.size >= 500) {
-                                flush(buffer, categoryBuffer)
+                                record.categories.forEach { category ->
+                                    if (category.id > 0 && category.name.isNotBlank()) {
+                                        categoriesById.putIfAbsent(category.id, category)
+                                        categoryBuffer.add(
+                                            YomitanTermCategoryEntity(
+                                                termId = id,
+                                                categoryId = category.id
+                                            )
+                                        )
+                                    }
+                                }
+
+                                val details = WordDetailsResponse(
+                                    word = normalizedWord,
+                                    similarWords = record.similarWords.map {
+                                        WordRef(id = it.id, kana = it.kana, writings = it.writings)
+                                    },
+                                    sentenceSearch = record.sentenceSearch,
+                                    sentenceMap = record.sentenceMap,
+                                    homophones = record.homophones.map {
+                                        WordRef(id = it.id, kana = it.kana, writings = it.writings)
+                                    },
+                                    kanjis = record.kanjis
+                                )
+
+                                buffer.add(
+                                    YomitanTermEntity(
+                                        id = id,
+                                        expression = expression,
+                                        reading = reading,
+                                        glossary = buildMeaningSummary(normalizedWord.meanings),
+                                        difficulty = normalizedWord.difficulty,
+                                        note = normalizedWord.meanings.firstOrNull()?.note.orEmpty().trim(),
+                                        source = sourceLabel,
+                                        detailsJson = gson.toJson(details)
+                                    )
+                                )
+                                importedCount += 1
+
+                                if (buffer.size >= 500) {
+                                    flush(buffer, categoryBuffer)
+                                }
                             }
                         }
                     }
@@ -114,6 +164,14 @@ class RawShinjikaiImporter(
                     )
                     yomitanDao.upsertMeta(YomitanMetaEntity(key = "last_import_source", value = sourceLabel))
                     yomitanDao.upsertMeta(YomitanMetaEntity(key = "last_import_count", value = importedCount.toString()))
+                    offlineImageRoot?.takeIf { it.isNotBlank() }?.let { imageRoot ->
+                        yomitanDao.upsertMeta(
+                            YomitanMetaEntity(
+                                key = OFFLINE_IMAGE_DIR_META_KEY,
+                                value = imageRoot
+                            )
+                        )
+                    }
                     yomitanDao.upsertMeta(
                         YomitanMetaEntity(
                             key = "last_import_epoch_ms",
@@ -156,14 +214,21 @@ class RawShinjikaiImporter(
             .filter { it.isNotBlank() }
             .take(3)
             .joinToString(separator = " / ")
-            .replace(Regex("""\s+"""), " ")
+            .replace(RAW_SHINJIKAI_WHITESPACE_REGEX, " ")
             .trim()
     }
+}
+
+internal fun hasDictionaryHeadword(expression: String, reading: String): Boolean {
+    return expression.isNotBlank() || reading.isNotBlank()
 }
 
 private data class RawShinjikaiRecord(
     @SerializedName("Word") val word: WordDetailsWord? = null,
     @SerializedName("Categories") val categories: List<CategoryRef> = emptyList(),
     @SerializedName("SimilarWords") val similarWords: List<SearchItem> = emptyList(),
-    @SerializedName("SentenceSearch") val sentenceSearch: List<SentenceExample> = emptyList()
+    @SerializedName("SentenceSearch") val sentenceSearch: List<SentenceExample> = emptyList(),
+    @SerializedName("SentenceMap") val sentenceMap: Map<String, SentenceExample> = emptyMap(),
+    @SerializedName("Homophones") val homophones: List<SearchItem> = emptyList(),
+    @SerializedName("Kanjis") val kanjis: List<KanjiInfo> = emptyList()
 )

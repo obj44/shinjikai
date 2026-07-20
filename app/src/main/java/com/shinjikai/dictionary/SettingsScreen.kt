@@ -1,6 +1,7 @@
 package com.shinjikai.dictionary
 
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,9 +31,9 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,13 +69,20 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.shinjikai.dictionary.data.AppThemeMode
 import com.shinjikai.dictionary.integration.ANKIDROID_PERMISSION
 import com.shinjikai.dictionary.integration.AnkiExporter
 import com.shinjikai.dictionary.ui.SettingsUiState
 import com.shinjikai.dictionary.ui.ShinjikaiViewModel
+import java.text.DateFormat
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class OfflineImportStatusUi(
     val label: String,
@@ -94,78 +102,73 @@ fun SettingsScreenContent(
     val context = LocalContext.current
 
     Scaffold(
-        containerColor = Color.Transparent,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) }
-            )
-        }
+        containerColor = Color.Transparent
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 32.dp)
+                    .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 20.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        SettingsToggleRow(
-                            icon = Icons.Filled.DarkMode,
-                            label = stringResource(R.string.settings_dark_mode),
-                            checked = uiState.settings.darkMode,
-                            onCheckedChange = viewModel::setDarkMode
-                        )
-                        SettingsToggleRow(
-                            icon = Icons.Filled.Palette,
-                            label = stringResource(R.string.settings_dynamic_color),
-                            checked = uiState.settings.useDynamicColor && supportsDynamicColor,
-                            onCheckedChange = viewModel::setUseDynamicColor,
-                            enabled = supportsDynamicColor
-                        )
-                    }
-                }
-
-                LocalDictionarySummaryCard(
-                    uiState = uiState,
-                    onClick = onOpenLocalDictionary
+                ShinjikaiPageHeader(
+                    title = stringResource(R.string.settings_title),
+                    subtitle = stringResource(R.string.settings_appearance_title),
+                    icon = Icons.Filled.Settings
                 )
 
-                Card(
+                ShinjikaiCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    contentPadding = 14.dp
                 ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        SettingsLinkRow(
-                            painterRes = R.drawable.ic_anki,
-                            title = stringResource(R.string.settings_anki_exporter_title),
-                            description = stringResource(R.string.settings_anki_exporter_description),
-                            contentDescription = stringResource(R.string.settings_anki_exporter_open),
-                            onClick = onOpenAnkiExporterSettings
-                        )
-                    }
+                    SectionLabel(text = stringResource(R.string.settings_appearance_title))
+                    ThemeModeSelector(
+                        selectedMode = uiState.settings.themeMode,
+                        onModeSelected = viewModel::setThemeMode,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                    )
+                    SettingsToggleRow(
+                        icon = Icons.Filled.Palette,
+                        label = stringResource(R.string.settings_dynamic_color),
+                        checked = uiState.settings.useDynamicColor && supportsDynamicColor,
+                        onCheckedChange = viewModel::setUseDynamicColor,
+                        enabled = supportsDynamicColor,
+                        modifier = Modifier.padding(top = 14.dp)
+                    )
                 }
 
-                Card(
+                ShinjikaiCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    contentPadding = 0.dp
+                ) {
+                    LocalDictionarySummaryCard(
+                        uiState = uiState,
+                        onClick = onOpenLocalDictionary
+                    )
+                }
+
+                ShinjikaiCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = 14.dp
+                ) {
+                    SettingsLinkRow(
+                        painterRes = R.drawable.ic_anki,
+                        title = stringResource(R.string.settings_anki_exporter_title),
+                        description = stringResource(R.string.settings_anki_exporter_description),
+                        contentDescription = stringResource(R.string.settings_anki_exporter_open),
+                        onClick = onOpenAnkiExporterSettings
+                    )
+                }
+
+                ShinjikaiCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = 14.dp
                 ) {
                     Column(
-                        modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         SettingsLinkRow(
@@ -177,7 +180,7 @@ fun SettingsScreenContent(
                                 context.startActivity(
                                     Intent(
                                         Intent.ACTION_VIEW,
-                                        Uri.parse("https://shinjikai.app")
+                                        Uri.parse("https://github.com/1Selxo/Shinjikai")
                                     )
                                 )
                             }
@@ -236,7 +239,8 @@ fun LocalDictionaryScreenContent(
                             contentDescription = stringResource(R.string.nav_back)
                         )
                     }
-                }
+                },
+                colors = shinjikaiTopAppBarColors()
             )
         }
     ) { padding ->
@@ -272,34 +276,49 @@ fun AnkiExporterSettingsScreenContent(
     onGoBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val canRequestDirectAnkiAdd = remember(context) {
+        AnkiExporter.canRequestDirectAdd(context)
+    }
+    var hasAnkiDatabasePermission by remember(context) {
+        mutableStateOf(AnkiExporter.hasDatabasePermission(context))
+    }
     var availableDecks by remember { mutableStateOf<List<String>>(emptyList()) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var deckMenuExpanded by remember { mutableStateOf(false) }
+    var isLoadingDecks by remember { mutableStateOf(false) }
+    suspend fun refreshAvailableDecks() {
+        statusMessage = null
+        isLoadingDecks = true
+        val decks = loadAnkiDeckNamesOffMain(context)
+        isLoadingDecks = false
+        availableDecks = decks
+        statusMessage = if (decks.isEmpty()) {
+            context.getString(R.string.settings_anki_no_decks)
+        } else {
+            null
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        availableDecks = if (granted) {
-            AnkiExporter.loadDeckNames(context)
+        hasAnkiDatabasePermission = granted
+        if (granted) {
+            coroutineScope.launch {
+                refreshAvailableDecks()
+            }
         } else {
-            emptyList()
-        }
-        statusMessage = when {
-            granted && availableDecks.isEmpty() -> context.getString(R.string.settings_anki_no_decks)
-            granted -> null
-            else -> context.getString(R.string.settings_anki_permission_required)
+            availableDecks = emptyList()
+            isLoadingDecks = false
+            statusMessage = context.getString(R.string.settings_anki_permission_required)
         }
     }
 
     LaunchedEffect(Unit) {
         when {
-            !AnkiExporter.canRequestDirectAdd(context) ->
+            !canRequestDirectAnkiAdd ->
                 statusMessage = context.getString(R.string.settings_anki_install_required)
-            AnkiExporter.hasDatabasePermission(context) -> {
-                availableDecks = AnkiExporter.loadDeckNames(context)
-                if (availableDecks.isEmpty()) {
-                    statusMessage = context.getString(R.string.settings_anki_no_decks)
-                }
-            }
+            hasAnkiDatabasePermission -> refreshAvailableDecks()
             else -> statusMessage = context.getString(R.string.settings_anki_allow_access)
         }
     }
@@ -315,7 +334,8 @@ fun AnkiExporterSettingsScreenContent(
                             contentDescription = stringResource(R.string.nav_back)
                         )
                     }
-                }
+                },
+                colors = shinjikaiTopAppBarColors()
             )
         }
     ) { padding ->
@@ -327,30 +347,23 @@ fun AnkiExporterSettingsScreenContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        stringResource(R.string.settings_anki_selected_deck),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(selectedDeckName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        stringResource(R.string.settings_anki_selected_deck_description),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
-                    )
-                }
+            ShinjikaiCard(modifier = Modifier.fillMaxWidth()) {
+                SectionLabel(text = stringResource(R.string.settings_anki_selected_deck))
+                Text(
+                    selectedDeckName,
+                    modifier = Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    stringResource(R.string.settings_anki_selected_deck_description),
+                    modifier = Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                )
             }
 
-            if (!AnkiExporter.hasDatabasePermission(context) && AnkiExporter.canRequestDirectAdd(context)) {
+            if (!hasAnkiDatabasePermission && canRequestDirectAnkiAdd) {
                 Button(
                     onClick = { permissionLauncher.launch(ANKIDROID_PERMISSION) },
                     modifier = Modifier.fillMaxWidth()
@@ -359,78 +372,77 @@ fun AnkiExporterSettingsScreenContent(
                 }
             }
 
+            if (isLoadingDecks) {
+                ShinjikaiCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(
+                            text = stringResource(R.string.settings_loading_inline),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
             statusMessage?.let { message ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Text(
-                        text = message,
-                        modifier = Modifier.padding(16.dp),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                ShinjikaiCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(text = message, style = MaterialTheme.typography.bodyMedium)
                 }
             }
 
             if (availableDecks.isNotEmpty()) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                ShinjikaiCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        stringResource(R.string.settings_anki_available_decks),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    ExposedDropdownMenuBox(
+                        expanded = deckMenuExpanded,
+                        onExpandedChange = { deckMenuExpanded = !deckMenuExpanded },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
                     ) {
-                        Text(
-                            stringResource(R.string.settings_anki_available_decks),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                        OutlinedTextField(
+                            value = selectedDeckName,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth(),
+                            label = { Text(stringResource(R.string.settings_anki_deck_field_label)) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = deckMenuExpanded) }
                         )
-                        ExposedDropdownMenuBox(
+                        ExposedDropdownMenu(
                             expanded = deckMenuExpanded,
-                            onExpandedChange = { deckMenuExpanded = !deckMenuExpanded }
+                            onDismissRequest = { deckMenuExpanded = false }
                         ) {
-                            OutlinedTextField(
-                                value = selectedDeckName,
-                                onValueChange = {},
-                                readOnly = true,
-                                modifier = Modifier
-                                    .menuAnchor()
-                                    .fillMaxWidth(),
-                                label = { Text(stringResource(R.string.settings_anki_deck_field_label)) },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = deckMenuExpanded) }
-                            )
-                            ExposedDropdownMenu(
-                                expanded = deckMenuExpanded,
-                                onDismissRequest = { deckMenuExpanded = false }
-                            ) {
-                                availableDecks.forEach { deckName ->
-                                    DropdownMenuItem(
-                                        text = { Text(deckName) },
-                                        onClick = {
-                                            onSelectDeck(deckName)
-                                            deckMenuExpanded = false
-                                        },
-                                        leadingIcon = {
-                                            if (deckName == selectedDeckName) {
-                                                Icon(
-                                                    imageVector = Icons.Filled.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
+                            availableDecks.forEach { deckName ->
+                                DropdownMenuItem(
+                                    text = { Text(deckName) },
+                                    onClick = {
+                                        onSelectDeck(deckName)
+                                        deckMenuExpanded = false
+                                    },
+                                    leadingIcon = {
+                                        if (deckName == selectedDeckName) {
+                                            Icon(
+                                                imageVector = Icons.Filled.CheckCircle,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
                                         }
-                                    )
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(128.dp))
-            }
-        }
-    }
-}
 
             OutlinedButton(
                 onClick = { onSelectDeck("Shinjikai") },
@@ -438,9 +450,16 @@ fun AnkiExporterSettingsScreenContent(
             ) {
                 Text(stringResource(R.string.settings_anki_use_default_deck))
             }
+
+            Spacer(modifier = Modifier.height(128.dp))
         }
     }
 }
+
+private suspend fun loadAnkiDeckNamesOffMain(context: Context): List<String> =
+    withContext(Dispatchers.IO) {
+        runCatching { AnkiExporter.loadDeckNames(context) }.getOrDefault(emptyList())
+    }
 
 @Composable
 private fun SettingsLinkRow(
@@ -454,7 +473,7 @@ private fun SettingsLinkRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -468,12 +487,19 @@ private fun SettingsLinkRow(
                 painterRes != null -> SettingsLeadingPainterIcon(painterRes = painterRes)
                 icon != null -> SettingsLeadingIcon(icon = icon)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                 )
             }
         }
@@ -483,6 +509,99 @@ private fun SettingsLinkRow(
         )
     }
 }
+
+@Composable
+private fun ThemeModeSelector(
+    selectedMode: AppThemeMode,
+    onModeSelected: (AppThemeMode) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val options = listOf(
+        ThemeModeOption(
+            mode = AppThemeMode.System,
+            icon = Icons.Filled.Public,
+            label = stringResource(R.string.settings_theme_system)
+        ),
+        ThemeModeOption(
+            mode = AppThemeMode.Light,
+            icon = Icons.Filled.Palette,
+            label = stringResource(R.string.settings_theme_light)
+        ),
+        ThemeModeOption(
+            mode = AppThemeMode.Dark,
+            icon = Icons.Filled.DarkMode,
+            label = stringResource(R.string.settings_theme_dark)
+        )
+    )
+
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.settings_theme_mode),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            options.forEach { option ->
+                val selected = selectedMode == option.mode
+                Surface(
+                    onClick = { onModeSelected(option.mode) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(76.dp),
+                    shape = ShinjikaiUi.CompactShape,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        ShinjikaiUi.panelColor(alpha = 0.24f)
+                    },
+                    border = if (selected) {
+                        ShinjikaiUi.cardBorder(alpha = 0.76f)
+                    } else {
+                        ShinjikaiUi.cardBorder(alpha = 0.24f)
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Icon(
+                            imageVector = option.icon,
+                            contentDescription = option.label,
+                            tint = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            }
+                        )
+                        Text(
+                            text = option.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (selected) {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private data class ThemeModeOption(
+    val mode: AppThemeMode,
+    val icon: ImageVector,
+    val label: String
+)
 
 @Composable
 private fun SettingsLeadingPainterIcon(painterRes: Int) {
@@ -522,48 +641,43 @@ private fun LocalDictionarySummaryCard(
         uiState.offlineImportError ->
             uiState.offlineImportStatus ?: stringResource(R.string.offline_import_failure)
         hasOfflineDictionary ->
-            "افتح هذه الصفحة لإدارة القاموس المحلي والاستيراد."
+            stringResource(R.string.settings_local_summary_ready)
         else ->
-            "افتح هذه الصفحة لتثبيت القاموس المحلي وإدارة الاستيراد."
+            stringResource(R.string.settings_local_summary_missing)
     }
 
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top
+        SettingsLeadingIcon(icon = Icons.Filled.DownloadForOffline)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            SettingsLeadingIcon(icon = Icons.Filled.DownloadForOffline)
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_local_dictionary),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                StatusBadge(
-                    label = statusUi.label,
-                    color = statusUi.color
-                )
-                Text(
-                    text = summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = stringResource(R.string.settings_local_dictionary)
+            Text(
+                text = stringResource(R.string.settings_local_dictionary),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            StatusBadge(
+                label = statusUi.label,
+                color = statusUi.color
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
             )
         }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = stringResource(R.string.settings_local_dictionary)
+        )
     }
 }
 
@@ -574,33 +688,30 @@ private fun OfflineImporterCard(
     onOpenDownloads: () -> Unit
 ) {
     val hasOfflineDictionary = uiState.offlineTermCount > 0
-    val statusColor = when {
-        uiState.isImportingOfflineData -> MaterialTheme.colorScheme.primary
-        uiState.offlineImportError -> MaterialTheme.colorScheme.error
-        hasOfflineDictionary -> Color(0xFF1F8A55)
-        else -> MaterialTheme.colorScheme.tertiary
-    }
-    val statusLabel = when {
-        uiState.isImportingOfflineData -> "جاري الاستيراد"
-        uiState.offlineImportError -> "تحتاج العملية إلى إعادة المحاولة"
-        hasOfflineDictionary -> "جاهز للاستخدام بدون إنترنت"
-        else -> "لم يتم تثبيت القاموس بعد"
+    val statusUi = offlineImportStatusUi(uiState, hasOfflineDictionary)
+    val locale = Locale.getDefault()
+    val importDateFormatter = remember(locale) {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, locale)
     }
     val summaryText = when {
         uiState.isImportingOfflineData ->
             uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline)
         hasOfflineDictionary ->
-            "تم تثبيت ${uiState.offlineTermCount} مدخل محلي ويمكنك استخدام البحث بدون اتصال."
+            stringResource(R.string.settings_offline_import_summary_ready, uiState.offlineTermCount)
         else ->
-            "اختر أرشيف `.zip` أو `.tar.xz` لاستيراد النصوص والصور محلياً."
+            stringResource(R.string.settings_offline_import_summary_empty)
     }
-    val latestUpdateText = uiState.offlineLastImportEpochMs?.let(::formatEpochAsLocal) ?: "لم يتم الاستيراد بعد"
-    val latestSourceText = uiState.offlineLastImportSource?.let(::formatImportSourceName) ?: "لا يوجد مصدر مسجل بعد"
+    val latestUpdateText = uiState.offlineLastImportEpochMs
+        ?.let { epochMs -> formatEpochAsLocal(epochMs, importDateFormatter) }
+        ?: stringResource(R.string.settings_last_import_never)
+    val latestSourceText = uiState.offlineLastImportSource?.let(::formatImportSourceName)
+        ?: stringResource(R.string.settings_last_import_source_none)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = ShinjikaiUi.CardShape,
+        colors = ShinjikaiUi.cardColors(),
+        border = ShinjikaiUi.cardBorder()
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -616,7 +727,7 @@ private fun OfflineImporterCard(
                         .size(44.dp)
                         .background(
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = ShinjikaiUi.CompactShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -636,8 +747,8 @@ private fun OfflineImporterCard(
                         fontWeight = FontWeight.SemiBold
                     )
                     StatusBadge(
-                        label = statusLabel,
-                        color = statusColor
+                        label = statusUi.label,
+                        color = statusUi.color
                     )
                 }
             }
@@ -650,22 +761,22 @@ private fun OfflineImporterCard(
 
             ImporterMetricRow(
                 title = stringResource(R.string.settings_local_count, uiState.offlineTermCount),
-                subtitle = "عدد المداخل المتاحة للبحث بدون اتصال"
+                subtitle = stringResource(R.string.settings_offline_metric_count_subtitle)
             )
 
             ImporterMetricRow(
-                title = "آخر تحديث",
+                title = stringResource(R.string.settings_offline_metric_last_update_title),
                 subtitle = latestUpdateText
             )
 
             ImporterMetricRow(
-                title = "المصدر الأخير",
+                title = stringResource(R.string.settings_offline_metric_source_title),
                 subtitle = latestSourceText
             )
 
             ImporterMetricRow(
-                title = "الملفات المدعومة",
-                subtitle = "ZIP و TAR.XZ للنصوص والصور"
+                title = stringResource(R.string.settings_offline_metric_supported_files_title),
+                subtitle = stringResource(R.string.settings_offline_metric_supported_files_subtitle)
             )
 
             Row(
@@ -687,10 +798,10 @@ private fun OfflineImporterCard(
                                     strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
-                                Text(text = "جاري الفهرسة..")
+                                Text(text = stringResource(R.string.settings_offline_indexing_inline))
                             }
                     } else {
-                        Text("استيراد ملف")
+                        Text(stringResource(R.string.settings_offline_import_file))
                     }
                 }
                 OutlinedButton(
@@ -742,6 +853,7 @@ private fun formatImportSourceName(source: String): String {
         "raw-shinjikai-jp-ar-picked-zip" -> "Raw Shinjikai (ZIP)"
         "raw-shinjikai-jp-ar-picked-tar-xz" -> "Raw Shinjikai (TAR.XZ)"
         "raw-shinjikai-jp-ar-jsonl" -> "Raw Shinjikai (JSONL)"
+        "bundled-1selxo-shinjikai-jsonl" -> "Bundled 1Selxo/Shinjikai"
         else -> source
     }
 }
@@ -753,19 +865,19 @@ private fun offlineImportStatusUi(
 ): OfflineImportStatusUi {
     return when {
         uiState.isImportingOfflineData -> OfflineImportStatusUi(
-            label = "جاري الاستيراد",
+            label = stringResource(R.string.settings_offline_status_importing),
             color = MaterialTheme.colorScheme.primary
         )
         uiState.offlineImportError -> OfflineImportStatusUi(
-            label = "تحتاج العملية إلى إعادة المحاولة",
+            label = stringResource(R.string.settings_offline_status_retry),
             color = MaterialTheme.colorScheme.error
         )
         hasOfflineDictionary -> OfflineImportStatusUi(
-            label = "جاهز للاستخدام بدون إنترنت",
-            color = Color(0xFF1F8A55)
+            label = stringResource(R.string.settings_offline_status_ready),
+            color = ShinjikaiUi.SuccessColor
         )
         else -> OfflineImportStatusUi(
-            label = "لم يتم تثبيت القاموس بعد",
+            label = stringResource(R.string.settings_offline_status_missing),
             color = MaterialTheme.colorScheme.tertiary
         )
     }
@@ -807,7 +919,7 @@ private fun ImporterMetricRow(
     subtitle: String
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = ShinjikaiUi.CompactShape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
     ) {
         Column(
@@ -838,12 +950,12 @@ private fun StatusMessage(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    val tint = if (isError) MaterialTheme.colorScheme.error else Color(0xFF1F8A55)
+    val tint = if (isError) MaterialTheme.colorScheme.error else ShinjikaiUi.SuccessColor
     val background = tint.copy(alpha = 0.12f)
     val icon = if (isError) Icons.Filled.ErrorOutline else Icons.Filled.CheckCircle
 
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = ShinjikaiUi.CompactShape,
         color = background
     ) {
         Row(
@@ -872,7 +984,11 @@ private fun StatusMessage(
                     OutlinedButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(message))
-                            Toast.makeText(context, "تم نسخ الرسالة", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.settings_copy_message_toast),
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         border = BorderStroke(1.dp, tint.copy(alpha = 0.35f))
                     ) {
@@ -883,7 +999,7 @@ private fun StatusMessage(
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "نسخ الرسالة",
+                            text = stringResource(R.string.settings_copy_message_action),
                             color = tint,
                             modifier = Modifier.padding(start = 8.dp)
                         )
@@ -895,60 +1011,16 @@ private fun StatusMessage(
 }
 
 @Composable
-private fun SettingsLinkRow(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SettingsLeadingIcon(icon = icon)
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
-                )
-            }
-        }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-            contentDescription = contentDescription
-        )
-    }
-}
-
-@Composable
 private fun SettingsToggleRow(
     icon: ImageVector,
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
