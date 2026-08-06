@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -43,14 +44,18 @@ fun BrowseScreenContent(
     val refreshState = entries.loadState.refresh
 
     Scaffold(
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(
+                top = 8.dp,
+                bottom = ShinjikaiUi.BottomBarClearance
+            ),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             item(key = "browse-header") {
@@ -116,7 +121,7 @@ fun BrowseScreenContent(
                 DictionaryEntryCard(
                     item = item,
                     onClick = { onOpenDetails(item) },
-                    modifier = Modifier.animateItemPlacement(),
+                    modifier = Modifier,
                     previewMaxLines = 2
                 )
             }

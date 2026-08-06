@@ -25,10 +25,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -109,6 +109,7 @@ internal data class GlossaryReference(val id: Int, val label: String, val start:
 internal data class DefinitionContent(val text: String, val references: List<GlossaryReference>)
 private data class DefinitionTextSegment(val text: String, val referenceId: Int?)
 
+private const val GLOSSARY_REFERENCE_ANNOTATION_TAG = "glossary_reference"
 private const val NO_BREAK_JOINER = "\u2060"
 private const val RELATED_WORDS_PAGE_SIZE = 5
 private const val EXAMPLES_PAGE_SIZE = 3
@@ -510,7 +511,8 @@ private fun ClickableDefinitionText(
     onReferenceClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
-    overflow: TextOverflow = TextOverflow.Clip
+    overflow: TextOverflow = TextOverflow.Clip,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
 ) {
     val referenceColor = MaterialTheme.colorScheme.primary
     val defaultColor = if (style.color == Color.Unspecified) {
@@ -532,7 +534,50 @@ private fun ClickableDefinitionText(
             color = defaultColor,
             textAlign = textAlign,
             maxLines = maxLines,
-            overflow = overflow
+            overflow = overflow,
+            onTextLayout = onTextLayout
+        )
+        return
+    }
+
+    val annotatedText = remember(text, validReferences, referenceColor) {
+        buildAnnotatedString {
+            append(text)
+            validReferences.forEach { reference ->
+                addStyle(
+                    style = SpanStyle(
+                        color = referenceColor,
+                        textDecoration = TextDecoration.Underline
+                    ),
+                    start = reference.start,
+                    end = reference.end
+                )
+                addStringAnnotation(
+                    tag = GLOSSARY_REFERENCE_ANNOTATION_TAG,
+                    annotation = reference.id.toString(),
+                    start = reference.start,
+                    end = reference.end
+                )
+            }
+        }
+    }
+
+    if (maxLines != Int.MAX_VALUE) {
+        ClickableText(
+            text = annotatedText,
+            modifier = modifier,
+            style = style.copy(color = defaultColor, textAlign = textAlign),
+            maxLines = maxLines,
+            overflow = overflow,
+            onTextLayout = onTextLayout,
+            onClick = { offset ->
+                annotatedText
+                    .getStringAnnotations(GLOSSARY_REFERENCE_ANNOTATION_TAG, offset, offset)
+                    .firstOrNull()
+                    ?.item
+                    ?.toIntOrNull()
+                    ?.let(onReferenceClick)
+            }
         )
         return
     }
@@ -753,11 +798,15 @@ private fun commonnessStars(difficulty: Int): String {
 }
 
 @Composable
-internal fun CommonnessBadge(difficulty: Int, modifier: Modifier = Modifier) {
+internal fun CommonnessBadge(
+    difficulty: Int,
+    modifier: Modifier = Modifier,
+    starsOnly: Boolean = false
+) {
     val stars = commonnessStars(difficulty)
     if (stars.isEmpty()) return
     ShinjikaiChip(
-        text = stringResource(R.string.detail_commonness_label, stars),
+        text = if (starsOnly) stars else stringResource(R.string.detail_commonness_label, stars),
         modifier = modifier,
         selected = true
     )
@@ -826,7 +875,7 @@ private fun DetailWordHeaderCard(
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 ) {
-                    Icon(imageVector = Icons.AutoMirrored.Filled.VolumeUp, contentDescription = pronounceLabel)
+                    Icon(imageVector = Icons.Filled.VolumeUp, contentDescription = pronounceLabel)
                 }
             }
             HeadwordFuriganaText(
@@ -1045,6 +1094,8 @@ private fun MeaningEntryCard(
     onExampleWordClick: (Int) -> Unit,
     onRelatedWordClick: (RelatedWordItem) -> Unit
 ) {
+    var definitionExpanded by remember(entry.definition) { mutableStateOf(false) }
+    var definitionCanExpand by remember(entry.definition) { mutableStateOf(false) }
     Surface(
         shape = ShinjikaiUi.CompactShape,
         color = MaterialTheme.colorScheme.surface,
@@ -1059,6 +1110,12 @@ private fun MeaningEntryCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Text(
+                    text = entryNumber.toString(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
                 if (entry.source.isNotBlank()) {
                     Text(
                         text = entry.source,
@@ -1068,12 +1125,6 @@ private fun MeaningEntryCard(
                 } else {
                     Spacer(modifier = Modifier)
                 }
-                Text(
-                    text = entryNumber.toString(),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
-                )
             }
             ClickableDefinitionText(
                 text = entry.definition,
@@ -1084,8 +1135,29 @@ private fun MeaningEntryCard(
                 ),
                 textAlign = TextAlign.Right,
                 onReferenceClick = onGlossaryReferenceClick,
+                maxLines = if (definitionExpanded) Int.MAX_VALUE else 3,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { textLayoutResult ->
+                    if (!definitionExpanded) {
+                        definitionCanExpand = textLayoutResult.hasVisualOverflow || textLayoutResult.lineCount > 3
+                    }
+                },
                 modifier = Modifier.fillMaxWidth()
             )
+            if (definitionCanExpand) {
+                TextButton(
+                    onClick = { definitionExpanded = !definitionExpanded },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(
+                        if (definitionExpanded) {
+                            stringResource(R.string.detail_show_less)
+                        } else {
+                            stringResource(R.string.detail_show_more)
+                        }
+                    )
+                }
+            }
             if (entry.note.isNotBlank()) {
                 ClickableDefinitionText(
                     text = "$notePrefix${entry.note}",
@@ -1117,8 +1189,10 @@ private fun MeaningEntryCard(
                     ) {
                         Text(
                             text = stringResource(R.string.detail_japanese_definition),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            modifier = Modifier.fillMaxWidth(),
+                            style = MaterialTheme.typography.labelSmall.copy(textDirection = TextDirection.Rtl),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Right
                         )
                         SelectionContainer {
                             Text(
@@ -1128,7 +1202,7 @@ private fun MeaningEntryCard(
                                     textDirection = TextDirection.ContentOrLtr
                                 ),
                                 color = MaterialTheme.colorScheme.onSurface,
-                                textAlign = TextAlign.Start
+                                textAlign = TextAlign.Right
                             )
                         }
                     }
@@ -1136,28 +1210,10 @@ private fun MeaningEntryCard(
             }
 
             entry.relatedGroups.forEach { group ->
-                Text(
-                    text = group.label.ifBlank { stringResource(R.string.detail_related_words_title) },
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold
+                MeaningRelatedGroupSection(
+                    group = group,
+                    onRelatedWordClick = onRelatedWordClick
                 )
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    group.items.forEach { relatedWord ->
-                        val label = relatedWord.text.ifBlank { relatedWord.kana }
-                        if (label.isNotBlank()) {
-                            ShinjikaiChip(
-                                text = label,
-                                onClick = { onRelatedWordClick(relatedWord) },
-                                selected = false
-                            )
-                        }
-                    }
-                }
             }
 
             if (entry.pictures.isNotEmpty()) {
@@ -1180,6 +1236,65 @@ private fun MeaningEntryCard(
                     initiallyVisible = EXAMPLES_PAGE_SIZE,
                     onWordClick = onExampleWordClick
                 )
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun MeaningRelatedGroupSection(
+    group: RelatedGroup,
+    onRelatedWordClick: (RelatedWordItem) -> Unit
+) {
+    var expanded by remember(group.label, group.items) { mutableStateOf(false) }
+    val title = group.label.ifBlank { stringResource(R.string.detail_related_words_title) }
+    val visibleItems = group.items.filter { it.text.isNotBlank() || it.kana.isNotBlank() }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ShinjikaiUi.CompactShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
+        border = ShinjikaiUi.cardBorder(alpha = 0.18f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = if (expanded) stringResource(R.string.detail_show_less) else stringResource(R.string.detail_show_more),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            if (expanded) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    visibleItems.forEach { relatedWord ->
+                        ShinjikaiChip(
+                            text = relatedWord.text.ifBlank { relatedWord.kana },
+                            onClick = { onRelatedWordClick(relatedWord) },
+                            selected = false
+                        )
+                    }
+                }
             }
         }
     }

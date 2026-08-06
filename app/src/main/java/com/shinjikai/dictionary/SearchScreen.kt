@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -128,7 +127,10 @@ fun SearchScreenContent(
         resultsListState.scrollToItem(0)
     }
 
-    Scaffold(containerColor = Color.Transparent) { padding ->
+    Scaffold(
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
@@ -233,7 +235,10 @@ fun SearchScreenContent(
                                 if (useOfflineMode && uiState.offlinePreviewItems.isNotEmpty()) {
                                     LazyColumn(
                                         modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(vertical = 4.dp),
+                                        contentPadding = PaddingValues(
+                                            top = 4.dp,
+                                            bottom = ShinjikaiUi.BottomBarClearance
+                                        ),
                                         verticalArrangement = Arrangement.spacedBy(5.dp)
                                     ) {
                                         item(key = "preview-label") {
@@ -250,7 +255,7 @@ fun SearchScreenContent(
                                             OfflinePreviewCard(
                                                 item = item,
                                                 onClick = { onOpenDetails(item) },
-                                                modifier = Modifier.animateItemPlacement()
+                                                modifier = Modifier
                                             )
                                         }
                                     }
@@ -303,7 +308,10 @@ fun SearchScreenContent(
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
                                 state = resultsListState,
-                                contentPadding = PaddingValues(vertical = 4.dp),
+                                contentPadding = PaddingValues(
+                                    top = 4.dp,
+                                    bottom = ShinjikaiUi.BottomBarClearance
+                                ),
                                 verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 items(
@@ -316,7 +324,6 @@ fun SearchScreenContent(
                                         item = item,
                                         onClick = { onOpenDetails(item) },
                                         modifier = Modifier
-                                            .animateItemPlacement()
                                             .fillMaxWidth(),
                                         previewMaxLines = if (uiState.activeCategoryId != null) 1 else 2
                                     )
@@ -467,7 +474,7 @@ private fun SearchTopDock(
                     overflow = TextOverflow.Ellipsis
                 )
             },
-            shape = RoundedCornerShape(8.dp),
+            shape = MaterialTheme.shapes.extraLarge,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onRunSearch() }),
             leadingIcon = {

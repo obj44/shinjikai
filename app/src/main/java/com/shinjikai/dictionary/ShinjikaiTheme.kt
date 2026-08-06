@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.TopAppBarColors
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.Typography
@@ -116,11 +117,18 @@ fun ShinjikaiTheme(
     } else {
         null
     }
-    val colorScheme = remember(dynamicScheme, baseScheme) {
-        dynamicScheme?.withShinjikaiBrand(baseScheme) ?: baseScheme
-    }
+    val colorScheme = dynamicScheme ?: baseScheme
     val arabicFontFamily = remember { FontFamily(Font(R.font.noto_sans_arabic)) }
     val baseTypography = remember { Typography() }
+    val appShapes = remember {
+        Shapes(
+            extraSmall = RoundedCornerShape(4.dp),
+            small = RoundedCornerShape(8.dp),
+            medium = RoundedCornerShape(12.dp),
+            large = RoundedCornerShape(16.dp),
+            extraLarge = RoundedCornerShape(28.dp)
+        )
+    }
     val appTypography = remember(arabicFontFamily, baseTypography) {
         Typography(
             displayLarge = baseTypography.displayLarge.copy(fontFamily = arabicFontFamily),
@@ -141,7 +149,12 @@ fun ShinjikaiTheme(
         )
     }
 
-    MaterialTheme(colorScheme = colorScheme, typography = appTypography, content = content)
+    MaterialTheme(
+        colorScheme = colorScheme,
+        typography = appTypography,
+        shapes = appShapes,
+        content = content
+    )
 }
 
 @Composable
@@ -154,42 +167,6 @@ fun AppSettings.resolveDarkTheme(): Boolean {
     }
 }
 
-private fun androidx.compose.material3.ColorScheme.withShinjikaiBrand(
-    baseScheme: androidx.compose.material3.ColorScheme
-): androidx.compose.material3.ColorScheme {
-    return copy(
-        primary = baseScheme.primary,
-        onPrimary = baseScheme.onPrimary,
-        primaryContainer = baseScheme.primaryContainer,
-        onPrimaryContainer = baseScheme.onPrimaryContainer,
-        secondary = baseScheme.secondary,
-        onSecondary = baseScheme.onSecondary,
-        secondaryContainer = baseScheme.secondaryContainer,
-        onSecondaryContainer = baseScheme.onSecondaryContainer,
-        tertiary = baseScheme.tertiary,
-        onTertiary = baseScheme.onTertiary,
-        tertiaryContainer = baseScheme.tertiaryContainer,
-        onTertiaryContainer = baseScheme.onTertiaryContainer,
-        error = baseScheme.error,
-        onError = baseScheme.onError,
-        errorContainer = baseScheme.errorContainer,
-        onErrorContainer = baseScheme.onErrorContainer,
-        background = baseScheme.background,
-        onBackground = baseScheme.onBackground,
-        surface = baseScheme.surface,
-        onSurface = baseScheme.onSurface,
-        surfaceVariant = baseScheme.surfaceVariant,
-        onSurfaceVariant = baseScheme.onSurfaceVariant,
-        inverseSurface = baseScheme.inverseSurface,
-        inverseOnSurface = baseScheme.inverseOnSurface,
-        inversePrimary = baseScheme.inversePrimary,
-        outline = baseScheme.outline,
-        outlineVariant = baseScheme.outlineVariant,
-        surfaceTint = baseScheme.surfaceTint,
-        scrim = baseScheme.scrim
-    )
-}
-
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
 private fun createDynamicColorScheme(
@@ -200,10 +177,11 @@ private fun createDynamicColorScheme(
 }
 
 object ShinjikaiUi {
-    val CardShape = RoundedCornerShape(8.dp)
-    val CompactShape = RoundedCornerShape(6.dp)
+    val CardShape = RoundedCornerShape(12.dp)
+    val CompactShape = RoundedCornerShape(8.dp)
     val PillShape = RoundedCornerShape(999.dp)
     val ScreenPadding = PaddingValues(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 16.dp)
+    val BottomBarClearance = 96.dp
     val SuccessColor = Color(0xFF1F8A55)
 
     @Composable

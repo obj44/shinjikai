@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -102,20 +103,25 @@ fun SettingsScreenContent(
     val context = LocalContext.current
 
     Scaffold(
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 20.dp)
+                    .padding(
+                        start = 16.dp,
+                        top = 8.dp,
+                        end = 16.dp,
+                        bottom = ShinjikaiUi.BottomBarClearance
+                    )
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 ShinjikaiPageHeader(
                     title = stringResource(R.string.settings_title),
-                    subtitle = stringResource(R.string.settings_appearance_title),
                     icon = Icons.Filled.Settings
                 )
 
@@ -229,6 +235,7 @@ fun LocalDictionaryScreenContent(
     val context = LocalContext.current
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_local_dictionary)) },
@@ -324,6 +331,7 @@ fun AnkiExporterSettingsScreenContent(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_anki_exporter_title)) },
@@ -634,7 +642,6 @@ private fun LocalDictionarySummaryCard(
     onClick: () -> Unit
 ) {
     val hasOfflineDictionary = uiState.offlineTermCount > 0
-    val statusUi = offlineImportStatusUi(uiState, hasOfflineDictionary)
     val summary = when {
         uiState.isImportingOfflineData ->
             uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline)
@@ -663,10 +670,6 @@ private fun LocalDictionarySummaryCard(
                 text = stringResource(R.string.settings_local_dictionary),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
-            )
-            StatusBadge(
-                label = statusUi.label,
-                color = statusUi.color
             )
             Text(
                 text = summary,

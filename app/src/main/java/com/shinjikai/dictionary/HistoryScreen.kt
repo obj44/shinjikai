@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -59,7 +61,8 @@ fun HistoryScreenContent(
     }
 
     Scaffold(
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             if (uiState.recentSearches.isEmpty()) {
@@ -93,6 +96,7 @@ fun HistoryScreenContent(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(bottom = ShinjikaiUi.BottomBarClearance),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     item(key = "history-header") {
@@ -117,9 +121,7 @@ fun HistoryScreenContent(
                         contentType = { "history-entry" }
                     ) { historyEntry ->
                         Surface(
-                            modifier = Modifier
-                                .animateItemPlacement()
-                                .fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth(),
                             shape = ShinjikaiUi.CardShape,
                             color = MaterialTheme.colorScheme.surface,
                             border = ShinjikaiUi.cardBorder(alpha = 0.22f),

@@ -24,9 +24,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -180,11 +181,12 @@ fun ShinjikaiApp(
             }
             Surface(color = MaterialTheme.colorScheme.background) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.fillMaxSize()) {
                     NavHost(
                         navController = navController,
                         startDestination = AppRoute.Search.route,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
                     ) {
                         composable(
                             route = AppRoute.Search.route,
@@ -440,26 +442,26 @@ fun ShinjikaiApp(
 
                     if (currentScreen in setOf(Screen.Search, Screen.Browse, Screen.History, Screen.Bookmarks, Screen.Settings)) {
                         PrimaryBottomBar(
-                                currentScreen = currentScreen ?: Screen.Search,
-                                onSearchClick = handleSearchTabClick,
-                                onBrowseClick = {
-                                    focusManager.clearFocus()
-                                    navController.navigateToPrimary(AppRoute.Browse)
-                                },
-                                onHistoryClick = {
-                                    focusManager.clearFocus()
-                                    navController.navigateToPrimary(AppRoute.History)
-                                },
-                                onBookmarksClick = {
-                                    focusManager.clearFocus()
-                                    navController.navigateToPrimary(AppRoute.Bookmarks)
-                                },
-                                onSettingsClick = {
-                                    focusManager.clearFocus()
-                                    navController.navigateToPrimary(AppRoute.Settings)
-                                }
-                            )
-                    }
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                            currentScreen = currentScreen ?: Screen.Search,
+                            onSearchClick = handleSearchTabClick,
+                            onBrowseClick = {
+                                focusManager.clearFocus()
+                                navController.navigateToPrimary(AppRoute.Browse)
+                            },
+                            onHistoryClick = {
+                                focusManager.clearFocus()
+                                navController.navigateToPrimary(AppRoute.History)
+                            },
+                            onBookmarksClick = {
+                                focusManager.clearFocus()
+                                navController.navigateToPrimary(AppRoute.Bookmarks)
+                            },
+                            onSettingsClick = {
+                                focusManager.clearFocus()
+                                navController.navigateToPrimary(AppRoute.Settings)
+                            }
+                        )
                     }
 
                     if (viewModel.settingsUiState.showIntroduction) {
@@ -470,9 +472,9 @@ fun ShinjikaiApp(
                                 navController.navigateToPrimary(AppRoute.Settings)
                             }
                         )
+                        }
                     }
                 }
-            }
         }
     }
 }
@@ -766,6 +768,7 @@ private fun DetailScreenContent(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.detail_title)) },

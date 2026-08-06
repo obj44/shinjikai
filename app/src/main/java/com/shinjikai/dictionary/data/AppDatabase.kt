@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         YomitanTermCategoryEntity::class
     ],
     // Keep this >= the highest version that has ever shipped, otherwise existing installs may crash on downgrade.
-    version = 9,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -225,6 +225,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                ensureCurrentDictionarySchema(db)
+            }
+        }
+
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                ensureCurrentDictionarySchema(db)
+            }
+        }
+
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                ensureCurrentDictionarySchema(db)
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -243,7 +261,10 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_5_6,
                         MIGRATION_6_7,
                         MIGRATION_7_8,
-                        MIGRATION_8_9
+                        MIGRATION_8_9,
+                        MIGRATION_9_10,
+                        MIGRATION_10_11,
+                        MIGRATION_11_12
                     )
                     .build()
                     .also { INSTANCE = it }
@@ -251,6 +272,10 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         fun repairOfflineDictionarySchema(db: SupportSQLiteDatabase) {
+            ensureCurrentDictionarySchema(db)
+        }
+
+        private fun ensureCurrentDictionarySchema(db: SupportSQLiteDatabase) {
             db.execSQL(
                 """
                 CREATE TABLE IF NOT EXISTS yomitan_terms (
@@ -294,6 +319,9 @@ abstract class AppDatabase : RoomDatabase() {
             db.execSQL("CREATE INDEX IF NOT EXISTS index_yomitan_terms_expression ON yomitan_terms(expression)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_yomitan_terms_reading ON yomitan_terms(reading)")
             db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_yomitan_terms_browse ON yomitan_terms(reading, expression, id)"
+            )
+            db.execSQL(
                 "CREATE INDEX IF NOT EXISTS index_yomitan_term_categories_categoryId ON yomitan_term_categories(categoryId)"
             )
             db.execSQL(
@@ -302,6 +330,13 @@ abstract class AppDatabase : RoomDatabase() {
 
             db.execSQL("DROP TABLE IF EXISTS yomitan_terms_fts")
             db.execSQL("CREATE VIRTUAL TABLE yomitan_terms_fts USING fts4(expression, reading, glossary)")
+            db.execSQL(
+                """
+                INSERT INTO yomitan_terms_fts(rowid, expression, reading, glossary)
+                SELECT id, expression, reading, glossary
+                FROM yomitan_terms
+                """.trimIndent()
+            )
         }
 
         private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {

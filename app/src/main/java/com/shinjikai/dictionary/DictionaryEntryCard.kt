@@ -63,7 +63,7 @@ fun DictionaryEntryCard(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    CommonnessBadge(difficulty = item.difficulty)
+                    CommonnessBadge(difficulty = item.difficulty, starsOnly = true)
                     Column(
                         modifier = Modifier.weight(1f),
                         horizontalAlignment = Alignment.End,

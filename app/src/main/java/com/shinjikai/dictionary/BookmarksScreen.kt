@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -136,7 +138,8 @@ fun BookmarksScreenContent(
     }
 
     Scaffold(
-        containerColor = Color.Transparent
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize()) {
             if (bookmarks.loadState.refresh is LoadState.NotLoading && bookmarks.itemCount == 0) {
@@ -171,6 +174,7 @@ fun BookmarksScreenContent(
                         .fillMaxSize()
                         .padding(padding)
                         .padding(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(bottom = ShinjikaiUi.BottomBarClearance),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                 item(key = "bookmarks-header") {
@@ -201,7 +205,7 @@ fun BookmarksScreenContent(
                     val isSelected = uiState.selectedIds.contains(bookmark.id)
 
                     Column(
-                        modifier = Modifier.animateItemPlacement(),
+                        modifier = Modifier,
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (showHeader) {
