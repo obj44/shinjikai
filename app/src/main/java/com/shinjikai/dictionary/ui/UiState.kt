@@ -6,6 +6,16 @@ import com.shinjikai.dictionary.data.RecentSearchEntry
 import com.shinjikai.dictionary.data.SearchItem
 import com.shinjikai.dictionary.data.WordDetailsResponse
 
+data class InstalledDictionaryUiItem(
+    val id: String,
+    val name: String,
+    val source: String,
+    val fileName: String? = null,
+    val sourceKey: String? = null,
+    val isBuiltIn: Boolean = false,
+    val enabled: Boolean = true
+)
+
 data class SearchUiState(
     val term: String = "",
     val activeCategoryId: Int? = null,
@@ -50,5 +60,6 @@ data class SettingsUiState(
     val offlineImportStatus: String? = null,
     val offlineLastImportEpochMs: Long? = null,
     val offlineTermCount: Int = 0,
-    val offlineLastImportSource: String? = null
+    val offlineLastImportSource: String? = null,
+    val installedDictionaries: List<InstalledDictionaryUiItem> = emptyList()
 )

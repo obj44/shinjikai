@@ -215,6 +215,31 @@ internal fun stageDirectoryCopy(
     return stagingDir
 }
 
+internal fun stageDirectoryMergedCopy(
+    sourceDir: File,
+    targetDir: File
+): File {
+    require(sourceDir.isDirectory) { "Image source directory does not exist." }
+    require(sourceDir.walkTopDown().any(File::isFile)) { "Image source directory is empty." }
+
+    val targetParent = targetDir.parentFile ?: error("Image target has no parent directory.")
+    targetParent.mkdirs()
+    val stagingDir = File(targetParent, ".${targetDir.name}.installing")
+    if (stagingDir.exists()) stagingDir.deleteRecursively()
+    if (targetDir.isDirectory) {
+        require(targetDir.copyRecursively(stagingDir, overwrite = true)) {
+            "Unable to stage existing image directory."
+        }
+    } else {
+        stagingDir.mkdirs()
+    }
+    require(sourceDir.copyRecursively(stagingDir, overwrite = true)) {
+        "Unable to merge image directory."
+    }
+    require(stagingDir.walkTopDown().any(File::isFile)) { "Staged image directory is empty." }
+    return stagingDir
+}
+
 internal fun replaceStagedDirectoryAtomically(
     stagingDir: File,
     targetDir: File

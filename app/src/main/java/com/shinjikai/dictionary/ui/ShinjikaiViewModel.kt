@@ -25,6 +25,8 @@ import com.shinjikai.dictionary.data.BookmarkRepository
 import com.shinjikai.dictionary.data.BrowsePagingSource
 import com.shinjikai.dictionary.data.BundledDictionaryInstaller
 import com.shinjikai.dictionary.data.DictionarySource
+import com.shinjikai.dictionary.data.InstalledDictionaryRecord
+import com.shinjikai.dictionary.data.InstalledDictionaryStore
 import com.shinjikai.dictionary.data.LocalYomitanSource
 import com.shinjikai.dictionary.data.OFFLINE_IMAGE_DIR_META_KEY
 import com.shinjikai.dictionary.data.RecentSearchStore
@@ -47,6 +49,7 @@ import com.shinjikai.dictionary.data.extractZipStream
 import com.shinjikai.dictionary.data.findOfflineImportPayload
 import com.shinjikai.dictionary.data.replaceStagedDirectoryAtomically
 import com.shinjikai.dictionary.data.stageDirectoryCopy
+import com.shinjikai.dictionary.data.stageDirectoryMergedCopy
 import com.shinjikai.dictionary.data.toBrowseSearchItem
 import java.io.File
 import java.io.FileInputStream
@@ -72,6 +75,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         get() = getApplication<Application>().applicationContext
     private val database = AppDatabase.getInstance(context)
     private val settingsStore = SettingsStore(context)
+    private val installedDictionaryStore = InstalledDictionaryStore(context)
     private val recentSearchStore = RecentSearchStore(context)
     private val bookmarkRepository = BookmarkRepository(database.bookmarkDao(), database.yomitanDao())
     private val bundledDictionaryInstaller = BundledDictionaryInstaller(context, database)
@@ -171,6 +175,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     var offlineLastImportEpochMs by mutableStateOf<Long?>(null)
     var offlineTermCount by mutableStateOf(0)
     var offlineLastImportSource by mutableStateOf<String?>(null)
+    var installedDictionaries by mutableStateOf(installedDictionaryStore.read())
     val searchUiState: SearchUiState
         get() = SearchUiState(
             term = term,
@@ -221,7 +226,27 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             offlineImportStatus = offlineImportStatus,
             offlineLastImportEpochMs = offlineLastImportEpochMs,
             offlineTermCount = offlineTermCount,
-            offlineLastImportSource = offlineLastImportSource
+            offlineLastImportSource = offlineLastImportSource,
+            installedDictionaries = installedDictionaries.map { record ->
+                InstalledDictionaryUiItem(
+                    id = record.id,
+                    name = record.name,
+                    source = record.source,
+                    fileName = record.fileName,
+                    sourceKey = record.sourceKey,
+                    enabled = record.enabled
+                )
+            }.let { records ->
+                listOf(
+                    InstalledDictionaryUiItem(
+                        id = "bundled-1selxo-shinjikai-jsonl",
+                        name = "Shinjikai",
+                        source = "Bundled dictionary",
+                        sourceKey = BundledDictionaryInstaller.BUNDLED_SOURCE_LABEL,
+                        isBuiltIn = true
+                    )
+                ) + records.filterNot { it.id == "bundled-1selxo-shinjikai-jsonl" }
+            }
         )
 
     init {
@@ -676,6 +701,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 categoryNameById = emptyMap()
                 refreshOfflineTermCount()
+                registerInstalledDictionary(uri)
                 refreshOfflinePreview()
                 if (settings.value.useOfflineMode) {
                     viewModelScope.launch { ensureCategoriesPreloadedIfNeeded() }
@@ -687,6 +713,33 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
         }
+    }
+
+    fun setDictionaryEnabled(dictionaryId: String, enabled: Boolean) {
+        val item = installedDictionaries.firstOrNull { it.id == dictionaryId } ?: return
+        val sourceKey = item.sourceKey ?: sourceKeyForPickedArchive(item.fileName.orEmpty())
+        installedDictionaryStore.setEnabled(dictionaryId, enabled)
+        installedDictionaries = installedDictionaryStore.read()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                database.yomitanDao().setSourceEnabled(sourceKey, enabled)
+            }
+            invalidateSearchAndBrowsePaging()
+        }
+    }
+
+    private fun registerInstalledDictionary(uri: Uri) {
+        val fileName = resolvePickedArchiveName(uri)?.trim().orEmpty().ifBlank { "Imported Yomitan dictionary" }
+        val id = "yomitan-" + fileName.lowercase().hashCode().toUInt().toString(16)
+        val record = InstalledDictionaryRecord(
+            id = id,
+            name = fileName.substringBeforeLast('.').ifBlank { fileName },
+            source = "Yomitan ZIP",
+            fileName = fileName,
+            sourceKey = sourceKeyForPickedArchive(fileName)
+        )
+        installedDictionaryStore.add(record)
+        installedDictionaries = installedDictionaryStore.read()
     }
 
     private fun requestCategoriesPreload() {
@@ -724,7 +777,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 } ?: error("Unable to read selected zip.")
 
                 expandNestedOfflineArchives(targetDir)
-                processPickedImport(targetDir, PICKED_ZIP_SHINJIKAI_SOURCE)
+                processPickedImport(targetDir, pickedSourceLabel(uri, PICKED_ZIP_SHINJIKAI_SOURCE))
             } finally {
                 if (targetDir.exists()) {
                     targetDir.deleteRecursively()
@@ -760,7 +813,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 } ?: error("Unable to read selected archive.")
 
                 expandNestedOfflineArchives(targetDir)
-                processPickedImport(targetDir, PICKED_TXZ_SHINJIKAI_SOURCE)
+                processPickedImport(targetDir, pickedSourceLabel(uri, PICKED_TXZ_SHINJIKAI_SOURCE))
             } finally {
                 if (targetDir.exists()) {
                     targetDir.deleteRecursively()
@@ -785,7 +838,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 context.getString(R.string.offline_import_phase_images),
                 0.2f
             )
-            stageDirectoryCopy(extractedImagesDir, imageTargetDir)
+            stageDirectoryMergedCopy(extractedImagesDir, imageTargetDir)
         } else {
             null
         }
@@ -857,6 +910,22 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                     null
                 }
             }
+    }
+
+    private fun pickedSourceLabel(uri: Uri, baseLabel: String): String {
+        val name = resolvePickedArchiveName(uri).orEmpty().lowercase()
+        val suffix = name.ifBlank { uri.toString().lowercase() }.hashCode().toUInt().toString(16)
+        return "$baseLabel-$suffix"
+    }
+
+    private fun sourceKeyForPickedArchive(fileName: String): String {
+        val base = if (fileName.lowercase().endsWith(".tar.xz") || fileName.lowercase().endsWith(".txz")) {
+            PICKED_TXZ_SHINJIKAI_SOURCE
+        } else {
+            PICKED_ZIP_SHINJIKAI_SOURCE
+        }
+        val suffix = fileName.lowercase().hashCode().toUInt().toString(16)
+        return "$base-$suffix"
     }
 
     private fun expandNestedOfflineArchives(rootDir: File) {

@@ -10,7 +10,8 @@ interface YomitanDao {
     @Query(
         """
         SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms
-        WHERE (expression <> '' OR reading <> '')
+        WHERE enabled = 1
+            AND (expression <> '' OR reading <> '')
             AND (
                 expression LIKE '%' || :term || '%'
                 OR reading LIKE '%' || :term || '%'
@@ -33,7 +34,8 @@ interface YomitanDao {
     @Query(
         """
         SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms
-        WHERE (expression <> '' OR reading <> '')
+        WHERE enabled = 1
+            AND (expression <> '' OR reading <> '')
             AND (
                 expression LIKE '%' || :term || '%'
                 OR reading LIKE '%' || :term || '%'
@@ -59,6 +61,7 @@ interface YomitanDao {
         FROM yomitan_terms t
         JOIN yomitan_terms_fts ON t.id = yomitan_terms_fts.rowid
         WHERE yomitan_terms_fts MATCH :matchQuery
+            AND t.enabled = 1
             AND (t.expression <> '' OR t.reading <> '')
         LIMIT :limit
         """
@@ -71,6 +74,7 @@ interface YomitanDao {
         FROM yomitan_terms t
         JOIN yomitan_terms_fts ON t.id = yomitan_terms_fts.rowid
         WHERE yomitan_terms_fts MATCH :matchQuery
+            AND t.enabled = 1
             AND (t.expression <> '' OR t.reading <> '')
         LIMIT :limit
         """
@@ -80,7 +84,8 @@ interface YomitanDao {
     @Query(
         """
         SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms
-        WHERE (expression <> '' OR reading <> '')
+        WHERE enabled = 1
+            AND (expression <> '' OR reading <> '')
             AND (
                 glossary LIKE '%' || :term || '%'
                 OR glossary LIKE '%' || :normalizedTerm || '%'
@@ -99,7 +104,8 @@ interface YomitanDao {
         """
         SELECT COUNT(*)
         FROM yomitan_terms
-        WHERE (expression <> '' OR reading <> '')
+        WHERE enabled = 1
+            AND (expression <> '' OR reading <> '')
             AND (
                 expression LIKE '%' || :term || '%'
                 OR reading LIKE '%' || :term || '%'
@@ -112,7 +118,7 @@ interface YomitanDao {
     @Query("SELECT * FROM yomitan_terms WHERE id = :id LIMIT 1")
     suspend fun getById(id: Int): YomitanTermEntity?
 
-    @Query("SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms WHERE id IN (:ids)")
+    @Query("SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms WHERE enabled = 1 AND id IN (:ids)")
     suspend fun getByIds(ids: List<Int>): List<YomitanTermListRow>
 
     @Query("SELECT * FROM yomitan_terms WHERE TRIM(expression) <> '' OR TRIM(reading) <> ''")
@@ -121,7 +127,8 @@ interface YomitanDao {
     @Query(
         """
         SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms
-        WHERE (expression <> '' OR reading <> '')
+        WHERE enabled = 1
+            AND (expression <> '' OR reading <> '')
             AND (
                 :lastReading IS NULL
                 OR reading > :lastReading
@@ -145,6 +152,21 @@ interface YomitanDao {
     @Query("DELETE FROM yomitan_term_categories")
     suspend fun clearCategoryRefs()
 
+    @Query("DELETE FROM yomitan_term_categories WHERE termId IN (SELECT id FROM yomitan_terms WHERE source = :source)")
+    suspend fun deleteCategoryRefsForSource(source: String)
+
+    @Query("DELETE FROM yomitan_terms_fts WHERE rowid IN (SELECT id FROM yomitan_terms WHERE source = :source)")
+    suspend fun deleteTermsFtsForSource(source: String)
+
+    @Query("DELETE FROM yomitan_terms WHERE source = :source")
+    suspend fun deleteTermsForSource(source: String)
+
+    @Query("SELECT COALESCE(MIN(id), 0) - 1 FROM yomitan_terms WHERE id < 0")
+    suspend fun nextNegativeTermId(): Int
+
+    @Query("UPDATE yomitan_terms SET enabled = :enabled WHERE source = :source")
+    suspend fun setSourceEnabled(source: String, enabled: Boolean)
+
     @Query("SELECT COUNT(*) FROM yomitan_term_categories")
     suspend fun countCategoryRefs(): Int
 
@@ -154,6 +176,7 @@ interface YomitanDao {
         FROM yomitan_terms t
         INNER JOIN yomitan_term_categories c ON c.termId = t.id
         WHERE c.categoryId = :categoryId
+            AND t.enabled = 1
             AND (t.expression <> '' OR t.reading <> '')
         ORDER BY t.id ASC
         LIMIT :limit OFFSET :offset
@@ -171,6 +194,7 @@ interface YomitanDao {
         FROM yomitan_term_categories c
         INNER JOIN yomitan_terms t ON t.id = c.termId
         WHERE c.categoryId = :categoryId
+            AND t.enabled = 1
             AND (t.expression <> '' OR t.reading <> '')
         """
     )
@@ -191,10 +215,16 @@ interface YomitanDao {
     @Query("SELECT COUNT(*) FROM yomitan_terms WHERE expression <> '' OR reading <> ''")
     suspend fun countTerms(): Int
 
+    @Query("SELECT COUNT(*) FROM yomitan_terms WHERE source = :source")
+    suspend fun countTermsBySource(source: String): Int
+
+    @Query("SELECT COUNT(*) FROM yomitan_terms_fts WHERE rowid IN (SELECT id FROM yomitan_terms WHERE source = :source)")
+    suspend fun countFtsTermsBySource(source: String): Int
+
     @Query(
         """
         SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms
-        WHERE expression <> '' OR reading <> ''
+        WHERE enabled = 1 AND (expression <> '' OR reading <> '')
         ORDER BY id ASC
         LIMIT :limit
         """
@@ -204,7 +234,8 @@ interface YomitanDao {
     @Query(
         """
         SELECT id, expression, reading, glossary, difficulty FROM yomitan_terms
-        WHERE (expression <> '' OR reading <> '')
+        WHERE enabled = 1
+            AND (expression <> '' OR reading <> '')
             AND id >= (
                 (RANDOM() & 2147483647) %
                 (SELECT COALESCE(MAX(id), 0) + 1 FROM yomitan_terms)
@@ -224,4 +255,3 @@ interface YomitanDao {
     @Query("DELETE FROM yomitan_meta WHERE key = :key")
     suspend fun deleteMeta(key: String)
 }
-

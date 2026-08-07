@@ -25,12 +25,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
@@ -46,6 +48,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -74,10 +77,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.shinjikai.dictionary.data.AppThemeMode
 import com.shinjikai.dictionary.integration.ANKIDROID_PERMISSION
 import com.shinjikai.dictionary.integration.AnkiExporter
 import com.shinjikai.dictionary.ui.SettingsUiState
+import com.shinjikai.dictionary.ui.InstalledDictionaryUiItem
 import com.shinjikai.dictionary.ui.ShinjikaiViewModel
 import java.text.DateFormat
 import java.util.Locale
@@ -182,6 +187,7 @@ fun SettingsScreenContent(
                             title = stringResource(R.string.settings_attribution_title),
                             description = stringResource(R.string.settings_attribution_description),
                             contentDescription = stringResource(R.string.settings_attribution_open),
+                            trailingIcon = Icons.AutoMirrored.Filled.OpenInNew,
                             onClick = {
                                 context.startActivity(
                                     Intent(
@@ -196,6 +202,7 @@ fun SettingsScreenContent(
                             title = stringResource(R.string.settings_github),
                             description = stringResource(R.string.settings_about_source_description),
                             contentDescription = stringResource(R.string.settings_open_github),
+                            trailingIcon = Icons.AutoMirrored.Filled.OpenInNew,
                             onClick = {
                                 context.startActivity(
                                     Intent(
@@ -230,10 +237,9 @@ fun SettingsScreenContent(
 fun LocalDictionaryScreenContent(
     uiState: SettingsUiState,
     onPickOfflineZip: () -> Unit,
+    onToggleDictionary: (String, Boolean) -> Unit,
     onGoBack: () -> Unit
 ) {
-    val context = LocalContext.current
-
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
@@ -244,6 +250,17 @@ fun LocalDictionaryScreenContent(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.nav_back)
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = onPickOfflineZip,
+                        enabled = !uiState.isImportingOfflineData
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.settings_offline_import_file)
                         )
                     }
                 },
@@ -259,18 +276,128 @@ fun LocalDictionaryScreenContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OfflineImporterCard(
-                uiState = uiState,
-                onPickOfflineZip = onPickOfflineZip,
-                onOpenDownloads = {
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/obj44/shinjikai/releases/tag/dict-v1")
-                        )
+            Text(
+                text = stringResource(R.string.settings_dictionary_page_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f)
+            )
+
+            Text(
+                text = stringResource(R.string.settings_installed_dictionaries_title),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            InstalledDictionariesCard(
+                dictionaries = uiState.installedDictionaries,
+                isImporting = uiState.isImportingOfflineData,
+                onToggleDictionary = onToggleDictionary,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (uiState.isImportingOfflineData) {
+                ShinjikaiCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline))
+                    }
+                    LinearProgressIndicator(
+                        progress = { uiState.offlineImportProgress },
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                     )
                 }
+            }
+
+            uiState.offlineImportStatus?.let { status ->
+                StatusMessage(message = status, isError = uiState.offlineImportError)
+            }
+
+            OutlinedButton(
+                onClick = onPickOfflineZip,
+                enabled = !uiState.isImportingOfflineData,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.settings_offline_import_file))
+            }
+        }
+    }
+}
+
+@Composable
+private fun InstalledDictionariesCard(
+    dictionaries: List<InstalledDictionaryUiItem>,
+    isImporting: Boolean,
+    onToggleDictionary: (String, Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = ShinjikaiUi.CardShape,
+        colors = ShinjikaiUi.cardColors(),
+        border = ShinjikaiUi.cardBorder()
+    ) {
+        Column {
+            dictionaries.forEachIndexed { index, dictionary ->
+                InstalledDictionaryRow(
+                    dictionary = dictionary,
+                    isImporting = isImporting,
+                    onToggle = { enabled -> onToggleDictionary(dictionary.id, enabled) }
+                )
+                if (index < dictionaries.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InstalledDictionaryRow(
+    dictionary: InstalledDictionaryUiItem,
+    isImporting: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val accent = if (dictionary.isBuiltIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(12.dp).background(accent, CircleShape)
+        )
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(dictionary.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(dictionary.source, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+            Text(
+                text = "ID: ${dictionary.id}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
             )
+            dictionary.fileName?.let { fileName ->
+                Text(
+                    text = fileName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                )
+            }
+        }
+        if (dictionary.isBuiltIn) {
+            Switch(checked = dictionary.enabled, onCheckedChange = onToggle)
+        } else if (isImporting) {
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        } else {
+            Switch(checked = dictionary.enabled, onCheckedChange = onToggle)
         }
     }
 }
@@ -476,6 +603,7 @@ private fun SettingsLinkRow(
     title: String,
     description: String,
     contentDescription: String,
+    trailingIcon: ImageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
     onClick: () -> Unit
 ) {
     Row(
@@ -512,8 +640,10 @@ private fun SettingsLinkRow(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-            contentDescription = contentDescription
+            imageVector = trailingIcon,
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
         )
     }
 }
@@ -678,8 +808,10 @@ private fun LocalDictionarySummaryCard(
             )
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-            contentDescription = stringResource(R.string.settings_local_dictionary)
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = stringResource(R.string.settings_local_dictionary),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(24.dp)
         )
     }
 }

@@ -348,6 +348,7 @@ fun ShinjikaiApp(
                                         )
                                     )
                                 },
+                                onToggleDictionary = viewModel::setDictionaryEnabled,
                                 onGoBack = { navController.popBackStack() }
                             )
                         }

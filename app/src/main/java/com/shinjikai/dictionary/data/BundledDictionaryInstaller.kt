@@ -47,6 +47,8 @@ class BundledDictionaryInstaller(
                 val signature = buildAssetSignature(jsonlPaths, schemaVersion = BUNDLED_DATA_SCHEMA)
                 val existingSignature = dao.getMetaValue(META_BUNDLED_SIGNATURE)
                 val existingCount = dao.countTerms()
+                val existingBundledCount = dao.countTermsBySource(BUNDLED_SOURCE_LABEL)
+                val existingBundledFtsCount = dao.countFtsTermsBySource(BUNDLED_SOURCE_LABEL)
                 val installedImages = installBundledImagesIfNeeded(
                     imageArchivePaths = imageArchivePaths,
                     force = force,
@@ -54,7 +56,7 @@ class BundledDictionaryInstaller(
                 )
                 val imageRoot = installedImages?.root ?: findImageAssetRoot()
 
-                if (!force && existingCount > 0 && existingSignature == signature) {
+                if (!force && existingBundledCount > 0 && existingBundledFtsCount > 0 && existingSignature == signature) {
                     imageRoot?.let { root ->
                         dao.upsertMeta(YomitanMetaEntity(key = OFFLINE_IMAGE_DIR_META_KEY, value = root))
                     }
@@ -197,7 +199,9 @@ class BundledDictionaryInstaller(
             require(stagingImageDir.isDirectory && stagingImageDir.walkTopDown().any(File::isFile)) {
                 "Bundled image archive did not contain yomitan_images."
             }
-            replaceStagedDirectoryAtomically(stagingImageDir, targetImageDir)
+            val mergedStagingImageDir = stageDirectoryMergedCopy(stagingImageDir, targetImageDir)
+            stagingImageDir.deleteRecursively()
+            replaceStagedDirectoryAtomically(mergedStagingImageDir, targetImageDir)
         } finally {
             if (stagingRoot.exists()) {
                 stagingRoot.deleteRecursively()

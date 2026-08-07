@@ -22,6 +22,7 @@ data class YomitanTermEntity(
     val difficulty: Int = 0,
     val note: String = "",
     val source: String = "yomitan",
+    val enabled: Boolean = true,
     val detailsJson: String? = null
 )
 

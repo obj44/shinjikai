@@ -69,9 +69,8 @@ class RawShinjikaiImporter(
                 val categoryBuffer = ArrayList<YomitanTermCategoryEntity>(1000)
 
                 database.withTransaction {
-                    yomitanDao.clearTermsFts()
-                    yomitanDao.clearTerms()
-                    yomitanDao.clearCategoryRefs()
+                    replaceSource(sourceLabel)
+                    var nextNegativeId = yomitanDao.nextNegativeTermId()
 
                     sources.forEach { source ->
                         source.openStream().bufferedReader(Charsets.UTF_8).use { reader ->
@@ -83,8 +82,12 @@ class RawShinjikaiImporter(
 
                                 val record = gson.fromJson(line, RawShinjikaiRecord::class.java) ?: continue
                                 val word = record.word ?: continue
-                                val id = word.id
-                                if (id <= 0) continue
+                                val id = if (sourceLabel == BundledDictionaryInstaller.BUNDLED_SOURCE_LABEL) {
+                                    word.id
+                                } else {
+                                    nextNegativeId--
+                                }
+                                if (id == 0) continue
 
                                 val normalizedWord = word.copy(
                                     pictures = word.pictures.orEmpty()
@@ -196,6 +199,12 @@ class RawShinjikaiImporter(
             categoryBuffer.clear()
         }
         buffer.clear()
+    }
+
+    private suspend fun replaceSource(sourceLabel: String) {
+        yomitanDao.deleteCategoryRefsForSource(sourceLabel)
+        yomitanDao.deleteTermsFtsForSource(sourceLabel)
+        yomitanDao.deleteTermsForSource(sourceLabel)
     }
 
     private fun YomitanTermEntity.toFts(): YomitanTermFtsEntity {

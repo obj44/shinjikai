@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         YomitanTermCategoryEntity::class
     ],
     // Keep this >= the highest version that has ever shipped, otherwise existing installs may crash on downgrade.
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -243,6 +243,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                if (!tableExists(db, "yomitan_terms")) return
+                if ("enabled" !in getTableColumns(db, "yomitan_terms")) {
+                    db.execSQL("ALTER TABLE yomitan_terms ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+                }
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -264,7 +273,8 @@ abstract class AppDatabase : RoomDatabase() {
                         MIGRATION_8_9,
                         MIGRATION_9_10,
                         MIGRATION_10_11,
-                        MIGRATION_11_12
+                        MIGRATION_11_12,
+                        MIGRATION_12_13
                     )
                     .build()
                     .also { INSTANCE = it }
@@ -314,6 +324,9 @@ abstract class AppDatabase : RoomDatabase() {
             }
             if ("detailsJson" !in termColumns) {
                 db.execSQL("ALTER TABLE yomitan_terms ADD COLUMN detailsJson TEXT")
+            }
+            if ("enabled" !in termColumns) {
+                db.execSQL("ALTER TABLE yomitan_terms ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
             }
 
             db.execSQL("CREATE INDEX IF NOT EXISTS index_yomitan_terms_expression ON yomitan_terms(expression)")

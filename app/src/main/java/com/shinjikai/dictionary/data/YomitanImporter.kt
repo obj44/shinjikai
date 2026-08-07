@@ -27,14 +27,13 @@ class YomitanImporter(
                 AppDatabase.repairOfflineDictionarySchema(database.openHelper.writableDatabase)
 
                 var importedCount = 0
-                var idSeed = 1
+                var idSeed = -1
                 val buffer = ArrayList<YomitanTermEntity>(1200)
 
                 coroutineContext.ensureActive()
                 database.withTransaction {
-                    yomitanDao.clearTermsFts()
-                    yomitanDao.clearTerms()
-                    yomitanDao.clearCategoryRefs()
+                    replaceSource(sourceLabel)
+                    idSeed = yomitanDao.nextNegativeTermId()
 
                     ZipInputStream(BufferedInputStream(zipStream)).use { zis ->
                         while (true) {
@@ -121,14 +120,13 @@ class YomitanImporter(
                 require(termBankFiles.isNotEmpty()) { "Selected archive does not contain Yomitan term banks." }
 
                 var importedCount = 0
-                var idSeed = 1
+                var idSeed = -1
                 val buffer = ArrayList<YomitanTermEntity>(1200)
 
                 coroutineContext.ensureActive()
                 database.withTransaction {
-                    yomitanDao.clearTermsFts()
-                    yomitanDao.clearTerms()
-                    yomitanDao.clearCategoryRefs()
+                    replaceSource(sourceLabel)
+                    idSeed = yomitanDao.nextNegativeTermId()
 
                     termBankFiles.forEach { file ->
                         coroutineContext.ensureActive()
@@ -184,6 +182,12 @@ class YomitanImporter(
                 importedCount
             }
         }
+    }
+
+    private suspend fun replaceSource(sourceLabel: String) {
+        yomitanDao.deleteCategoryRefsForSource(sourceLabel)
+        yomitanDao.deleteTermsFtsForSource(sourceLabel)
+        yomitanDao.deleteTermsForSource(sourceLabel)
     }
 
     private suspend fun parseTermBank(
