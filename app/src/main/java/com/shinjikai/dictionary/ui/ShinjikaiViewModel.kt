@@ -728,6 +728,23 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun deleteDictionary(dictionaryId: String) {
+        val item = installedDictionaries.firstOrNull { it.id == dictionaryId } ?: return
+        val sourceKey = item.sourceKey ?: sourceKeyForPickedArchive(item.fileName.orEmpty())
+        installedDictionaryStore.remove(dictionaryId)
+        installedDictionaries = installedDictionaryStore.read()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val dao = database.yomitanDao()
+                dao.deleteCategoryRefsForSource(sourceKey)
+                dao.deleteTermsFtsForSource(sourceKey)
+                dao.deleteTermsForSource(sourceKey)
+            }
+            invalidateSearchAndBrowsePaging()
+            refreshOfflineTermCount()
+        }
+    }
+
     private fun registerInstalledDictionary(uri: Uri) {
         val fileName = resolvePickedArchiveName(uri)?.trim().orEmpty().ifBlank { "Imported Yomitan dictionary" }
         val id = "yomitan-" + fileName.lowercase().hashCode().toUInt().toString(16)

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Public
@@ -41,14 +42,20 @@ import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -57,6 +64,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -207,7 +215,7 @@ fun SettingsScreenContent(
                                 context.startActivity(
                                     Intent(
                                         Intent.ACTION_VIEW,
-                                        Uri.parse("https://github.com/obj44/shinjikai")
+                                        Uri.parse("https://github.com/objx0/Shinjikai-Android")
                                     )
                                 )
                             }
@@ -238,6 +246,7 @@ fun LocalDictionaryScreenContent(
     uiState: SettingsUiState,
     onPickOfflineZip: () -> Unit,
     onToggleDictionary: (String, Boolean) -> Unit,
+    onDeleteDictionary: (String) -> Unit,
     onGoBack: () -> Unit
 ) {
     Scaffold(
@@ -254,9 +263,13 @@ fun LocalDictionaryScreenContent(
                     }
                 },
                 actions = {
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = onPickOfflineZip,
-                        enabled = !uiState.isImportingOfflineData
+                        enabled = !uiState.isImportingOfflineData,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,
@@ -273,6 +286,7 @@ fun LocalDictionaryScreenContent(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(16.dp)
+                .padding(bottom = 12.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -294,6 +308,7 @@ fun LocalDictionaryScreenContent(
                 dictionaries = uiState.installedDictionaries,
                 isImporting = uiState.isImportingOfflineData,
                 onToggleDictionary = onToggleDictionary,
+                onDeleteDictionary = onDeleteDictionary,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -317,15 +332,6 @@ fun LocalDictionaryScreenContent(
                 StatusMessage(message = status, isError = uiState.offlineImportError)
             }
 
-            OutlinedButton(
-                onClick = onPickOfflineZip,
-                enabled = !uiState.isImportingOfflineData,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Spacer(Modifier.size(8.dp))
-                Text(stringResource(R.string.settings_offline_import_file))
-            }
         }
     }
 }
@@ -335,6 +341,7 @@ private fun InstalledDictionariesCard(
     dictionaries: List<InstalledDictionaryUiItem>,
     isImporting: Boolean,
     onToggleDictionary: (String, Boolean) -> Unit,
+    onDeleteDictionary: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -348,7 +355,8 @@ private fun InstalledDictionariesCard(
                 InstalledDictionaryRow(
                     dictionary = dictionary,
                     isImporting = isImporting,
-                    onToggle = { enabled -> onToggleDictionary(dictionary.id, enabled) }
+                    onToggle = { enabled -> onToggleDictionary(dictionary.id, enabled) },
+                    onDelete = { onDeleteDictionary(dictionary.id) }
                 )
                 if (index < dictionaries.lastIndex) {
                     HorizontalDivider(
@@ -365,40 +373,101 @@ private fun InstalledDictionariesCard(
 private fun InstalledDictionaryRow(
     dictionary: InstalledDictionaryUiItem,
     isImporting: Boolean,
-    onToggle: (Boolean) -> Unit
+    onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showDeleteConfirmation by remember(dictionary.id) { mutableStateOf(false) }
     val accent = if (dictionary.isBuiltIn) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.tertiary
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier.size(12.dp).background(accent, CircleShape)
-        )
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(dictionary.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(dictionary.source, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
-            Text(
-                text = "ID: ${dictionary.id}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
-            )
-            dictionary.fileName?.let { fileName ->
-                Text(
-                    text = fileName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                showDeleteConfirmation = true
+            }
+            false
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = !dictionary.isBuiltIn && !isImporting,
+        backgroundContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
+        },
+        content = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(12.dp).background(accent, CircleShape))
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(dictionary.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(dictionary.source, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f))
+                    Text("ID: ${dictionary.id}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                    dictionary.fileName?.let { fileName ->
+                        Text(fileName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                    }
+                }
+                if (isImporting) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Switch(checked = dictionary.enabled, onCheckedChange = onToggle)
+                }
+            }
         }
-        if (dictionary.isBuiltIn) {
-            Switch(checked = dictionary.enabled, onCheckedChange = onToggle)
-        } else if (isImporting) {
-            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-        } else {
-            Switch(checked = dictionary.enabled, onCheckedChange = onToggle)
-        }
+    )
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text(stringResource(R.string.settings_delete_dictionary_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.settings_delete_dictionary_message,
+                        dictionary.name
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        onDelete()
+                    }
+                ) {
+                    Text(stringResource(R.string.settings_delete_dictionary_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }
 
