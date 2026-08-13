@@ -16,13 +16,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ClearAll
-import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -105,9 +107,15 @@ fun HistoryScreenContent(
                             subtitle = stringResource(R.string.search_recent_subtitle),
                             icon = Icons.Default.History,
                             action = {
-                                IconButton(onClick = { pendingClearAllHistory = true }) {
+                                FilledTonalIconButton(
+                                    onClick = { pendingClearAllHistory = true },
+                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Default.ClearAll,
+                                        imageVector = Icons.Default.DeleteSweep,
                                         contentDescription = stringResource(R.string.search_clear_history)
                                     )
                                 }
@@ -175,7 +183,7 @@ fun HistoryScreenContent(
                                 }
                                 IconButton(onClick = { pendingDeleteTerm = historyEntry.term }) {
                                     Icon(
-                                        imageVector = Icons.Default.DeleteOutline,
+                                        imageVector = Icons.Default.Close,
                                         contentDescription = stringResource(R.string.search_remove_history),
                                         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
                                         modifier = Modifier.size(20.dp)

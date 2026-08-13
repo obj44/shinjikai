@@ -9,6 +9,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import com.shinjikai.dictionary.data.WritingPart
@@ -57,7 +58,13 @@ internal fun HeadwordFuriganaText(
         segments = layoutSegments,
         modifier = modifier.fillMaxWidth(),
         baseStyle = baseStyle.copy(textDirection = TextDirection.ContentOrLtr),
-        rubyStyle = rubyStyle.copy(textDirection = TextDirection.ContentOrLtr),
+        rubyStyle = rubyStyle.copy(
+            textDirection = TextDirection.ContentOrLtr,
+            // Prevent the theme's generous label line height from making the
+            // kana box taller than the visible kana glyphs.
+            lineHeight = rubyStyle.fontSize.takeUnless { it == TextUnit.Unspecified }
+                ?: rubyStyle.lineHeight
+        ),
         baseColor = { baseColor },
         rubyColor = { rubyColor },
         textAlign = textAlign

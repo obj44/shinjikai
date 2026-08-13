@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -69,8 +70,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
-import coil.compose.SubcomposeAsyncImageContent
+import coil.compose.AsyncImage
 import com.google.gson.JsonElement
 import com.shinjikai.dictionary.data.Meaning
 import com.shinjikai.dictionary.data.KanjiInfo
@@ -149,38 +149,51 @@ fun DetailScreenBody(
     val pronounceLabel = stringResource(R.string.detail_pronounce)
     val japaneseAudioUnavailableMessage = stringResource(R.string.detail_japanese_audio_unavailable)
     val wordCopiedMessage = stringResource(R.string.detail_word_copied)
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (detailState.loading) {
-            DetailLoadingSkeleton(
-                message = detailState.offlineImportPhase
-                    ?.takeIf { detailState.isImportingOfflineData && it.isNotBlank() }
-                    ?: stringResource(R.string.settings_loading_inline)
-            )
-            return@Column
+    if (detailState.loading) {
+        LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item {
+                DetailLoadingSkeleton(
+                    message = detailState.offlineImportPhase
+                        ?.takeIf { detailState.isImportingOfflineData && it.isNotBlank() }
+                        ?: stringResource(R.string.settings_loading_inline)
+                )
+            }
         }
+        return
+    }
 
-        detailState.error?.let {
-            DetailStateCard(
-                title = stringResource(R.string.error_details_load),
-                message = it,
-                actionLabel = stringResource(R.string.detail_retry),
-                onAction = viewModel::retryDetailsLoad
-            )
+    if (item == null) {
+        LazyColumn(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            detailState.error?.let { error ->
+                item {
+                    DetailStateCard(
+                        title = stringResource(R.string.error_details_load),
+                        message = error,
+                        actionLabel = stringResource(R.string.detail_retry),
+                        onAction = viewModel::retryDetailsLoad
+                    )
+                }
+            }
+            item { Text(stringResource(R.string.detail_not_selected)) }
         }
+        return
+    }
 
-        if (item == null) {
-            Text(stringResource(R.string.detail_not_selected))
-            return@Column
-        }
+    val error = detailState.error
 
         val details = detailState.details
         val primaryWriting = remember(details) {
             details?.word?.writings?.firstOrNull { it.text.isNotBlank() }
         }
+        val detailKana = details?.word?.kana.orEmpty()
         val kanji = primaryWriting?.text
             .orEmpty()
-            .ifBlank { item.primaryWriting.ifBlank { "-" } }
-        val kana = details?.word?.kana.orEmpty().ifBlank { item.kana.ifBlank { "-" } }
+            .ifBlank {
+                detailKana.ifBlank {
+                    item.primaryWriting.ifBlank { item.kana.ifBlank { "-" } }
+                }
+            }
+        val kana = detailKana.ifBlank { item.kana.ifBlank { "-" } }
         val alternateWritings = remember(details, kanji) {
             details?.word?.writings.orEmpty()
                 .map { it.text.trim() }
@@ -238,8 +251,50 @@ fun DetailScreenBody(
             }
             addAll(categoryChips)
         }
+        val wordPictures = remember(details?.word?.pictures) {
+            extractDetailPictures(details?.word?.pictures.orEmpty())
+        }
+        val relatedItems = remember(details?.similarWords) {
+            details?.similarWords.orEmpty().map {
+                RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana)
+            }
+                .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
+                .distinctBy { "${it.wordId}|${it.meaningNo}|${it.text.trim()}|${it.kana.trim()}" }
+        }
+        val homophones = remember(details?.homophones) {
+            details?.homophones.orEmpty()
+                .map { RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana) }
+                .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
+                .distinctBy { it.wordId }
+        }
+        val kanjiInfo = remember(details?.kanjis) {
+            details?.kanjis.orEmpty()
+                .filter { it.displayCharacter().isNotBlank() }
+        }
+        val directMeaningExampleList = remember(meaningEntries) {
+            meaningEntries.flatMap { it.examples }
+        }
+        val examples = remember(details, directMeaningExampleList) {
+            details?.additionalExamples(directMeaningExampleList).orEmpty()
+        }
 
-        DetailWordHeaderCard(
+    LazyColumn(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        error?.let { message ->
+            item {
+                DetailStateCard(
+                    title = stringResource(R.string.error_details_load),
+                    message = message,
+                    actionLabel = stringResource(R.string.detail_retry),
+                    onAction = viewModel::retryDetailsLoad
+                )
+            }
+        }
+
+        item {
+            DetailWordHeaderCard(
             kanji = kanji,
             kana = kana,
             writingParts = primaryWriting?.parts,
@@ -267,10 +322,12 @@ fun DetailScreenBody(
                     Toast.makeText(context, wordCopiedMessage, Toast.LENGTH_SHORT).show()
                 }
             }
-        )
+            )
+        }
 
         if (meaningEntries.isNotEmpty()) {
-            MeaningEntriesCard(
+            item {
+                MeaningEntriesCard(
                 title = stringResource(R.string.detail_definitions_title),
                 entries = meaningEntries,
                 notePrefix = notePrefix,
@@ -287,38 +344,34 @@ fun DetailScreenBody(
                     focusManager.clearFocus()
                     onOpenRelatedWord(relatedWord)
                 }
-            )
+                )
+            }
         } else {
-            DefinitionsCard(
+            item {
+                DefinitionsCard(
                 title = stringResource(R.string.detail_definitions_title),
                 content = definitionContent,
                 onGlossaryReferenceClick = { referenceId ->
                     focusManager.clearFocus()
                     onOpenGlossaryReference(referenceId)
                 }
-            )
+                )
+            }
         }
 
-        val wordPictures = remember(details?.word?.pictures) {
-            extractDetailPictures(details?.word?.pictures.orEmpty())
-        }
         if (wordPictures.isNotEmpty()) {
-            PicturesSection(
+            item {
+                PicturesSection(
                 title = stringResource(R.string.detail_pictures_title),
                 pictures = wordPictures,
                 onImageClick = { zoomedPictureUrl = it }
-            )
+                )
+            }
         }
 
-        val relatedItems = remember(details?.similarWords) {
-            details?.similarWords.orEmpty().map {
-                RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana)
-            }
-                .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
-                .distinctBy { "${it.wordId}|${it.meaningNo}|${it.text.trim()}|${it.kana.trim()}" }
-        }
         if (relatedItems.isNotEmpty()) {
-            RelatedWordsCard(
+            item {
+                RelatedWordsCard(
                 title = stringResource(R.string.detail_similar_words_title),
                 items = relatedItems,
                 expandAllByDefault = true,
@@ -326,17 +379,13 @@ fun DetailScreenBody(
                     focusManager.clearFocus()
                     onOpenRelatedWord(it)
                 }
-            )
+                )
+            }
         }
 
-        val homophones = remember(details?.homophones) {
-            details?.homophones.orEmpty()
-                .map { RelatedWordItem(wordId = it.id, text = it.primaryWriting, kana = it.kana) }
-                .filter { it.text.isNotBlank() || it.kana.isNotBlank() }
-                .distinctBy { it.wordId }
-        }
         if (homophones.isNotEmpty()) {
-            RelatedWordsCard(
+            item {
+                RelatedWordsCard(
                 title = stringResource(R.string.detail_homophones_title),
                 items = homophones,
                 expandAllByDefault = true,
@@ -344,28 +393,22 @@ fun DetailScreenBody(
                     focusManager.clearFocus()
                     onOpenRelatedWord(it)
                 }
-            )
+                )
+            }
         }
 
-        val kanjiInfo = remember(details?.kanjis) {
-            details?.kanjis.orEmpty()
-                .filter { it.displayCharacter().isNotBlank() }
-        }
         if (kanjiInfo.isNotEmpty()) {
-            KanjiInformationSection(
+            item {
+                KanjiInformationSection(
                 title = stringResource(R.string.detail_kanji_title),
                 items = kanjiInfo
-            )
+                )
+            }
         }
 
-        val directMeaningExampleList = remember(meaningEntries) {
-            meaningEntries.flatMap { it.examples }
-        }
-        val examples = remember(details, directMeaningExampleList) {
-            details?.additionalExamples(directMeaningExampleList).orEmpty()
-        }
         if (examples.isNotEmpty()) {
-            ExamplesCard(
+            item {
+                ExamplesCard(
                 title = stringResource(R.string.detail_additional_examples_title),
                 items = examples,
                 showAllByDefault = false,
@@ -373,14 +416,17 @@ fun DetailScreenBody(
                     focusManager.clearFocus()
                     onOpenGlossaryReference(wordId)
                 }
-            )
+                )
+            }
         }
 
-        zoomedPictureUrl?.let { imageUrl ->
-            ZoomableImageDialog(
-                imageUrl = imageUrl,
-                onDismiss = { zoomedPictureUrl = null }
-            )
+        item {
+            zoomedPictureUrl?.let { imageUrl ->
+                ZoomableImageDialog(
+                    imageUrl = imageUrl,
+                    onDismiss = { zoomedPictureUrl = null }
+                )
+            }
         }
     }
 }
@@ -979,10 +1025,15 @@ internal fun buildDetailAnkiNoteContent(
     detailState: DetailUiState
 ): com.shinjikai.dictionary.integration.AnkiNoteContent? {
     val item = detailState.selectedItem ?: return null
+    val detailKana = detailState.details?.word?.kana.orEmpty()
     val kanji = detailState.details?.word?.writings?.firstOrNull { it.text.isNotBlank() }?.text
         .orEmpty()
-        .ifBlank { item.primaryWriting.ifBlank { "-" } }
-    val kana = detailState.details?.word?.kana.orEmpty().ifBlank { item.kana.ifBlank { "-" } }
+        .ifBlank {
+            detailKana.ifBlank {
+                item.primaryWriting.ifBlank { item.kana.ifBlank { "-" } }
+            }
+        }
+    val kana = detailKana.ifBlank { item.kana.ifBlank { "-" } }
     val definitionContent = if (useOfflineMode) {
         DefinitionContent(
             text = item.meaningSummary.ifBlank { "-" },
@@ -1412,21 +1463,12 @@ private fun PictureCard(picture: DetailPicture, onClick: () -> Unit) {
             modifier = Modifier.fillMaxSize().padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SubcomposeAsyncImage(
+            AsyncImage(
                 model = picture.url,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().weight(1f)
-            ) {
-                when (painter.state) {
-                    is coil.compose.AsyncImagePainter.State.Loading -> CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp
-                    )
-                    is coil.compose.AsyncImagePainter.State.Error -> Text(stringResource(R.string.detail_image_load_error))
-                    else -> SubcomposeAsyncImageContent()
-                }
-            }
+            )
             if (picture.description.isNotBlank()) {
                 Text(
                     text = forceRtlText(picture.description),
@@ -1578,7 +1620,7 @@ private fun ZoomableImageDialog(
                         .clip(ShinjikaiUi.CompactShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    SubcomposeAsyncImage(
+                    AsyncImage(
                         model = imageUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Fit,
@@ -1601,20 +1643,7 @@ private fun ZoomableImageDialog(
                                 translationX = offset.x
                                 translationY = offset.y
                             }
-                    ) {
-                        when (painter.state) {
-                            is coil.compose.AsyncImagePainter.State.Loading -> CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp,
-                                color = Color.White
-                            )
-                            is coil.compose.AsyncImagePainter.State.Error -> Text(
-                                text = stringResource(R.string.detail_image_load_error),
-                                color = Color.White
-                            )
-                            else -> SubcomposeAsyncImageContent()
-                        }
-                    }
+                    )
                 }
                 Text(
                     text = stringResource(R.string.detail_pictures_title),

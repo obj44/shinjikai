@@ -45,19 +45,6 @@ fun PrimaryBottomBar(
         windowInsets = NavigationBarDefaults.windowInsets
     ) {
                 BottomBarItem(
-                    selected = currentScreen == Screen.Search,
-                    onClick = onSearchClick,
-                    icon = { modifier ->
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = stringResource(R.string.nav_search),
-                            modifier = modifier
-                        )
-                    },
-                    label = stringResource(R.string.nav_search),
-                    colors = itemColors
-                )
-                BottomBarItem(
                     selected = currentScreen == Screen.Browse,
                     onClick = onBrowseClick,
                     icon = { modifier ->
@@ -81,6 +68,19 @@ fun PrimaryBottomBar(
                         )
                     },
                     label = stringResource(R.string.history_title),
+                    colors = itemColors
+                )
+                BottomBarItem(
+                    selected = currentScreen == Screen.Search,
+                    onClick = onSearchClick,
+                    icon = { modifier ->
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = stringResource(R.string.nav_search),
+                            modifier = modifier
+                        )
+                    },
+                    label = stringResource(R.string.nav_search),
                     colors = itemColors
                 )
                 BottomBarItem(

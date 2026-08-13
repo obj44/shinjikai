@@ -427,7 +427,11 @@ private fun InstalledDictionaryRow(
                 if (isImporting) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Switch(checked = dictionary.enabled, onCheckedChange = onToggle)
+                    Switch(
+                        checked = dictionary.enabled,
+                        onCheckedChange = onToggle,
+                        enabled = !dictionary.isBuiltIn && !isImporting
+                    )
                 }
             }
         }

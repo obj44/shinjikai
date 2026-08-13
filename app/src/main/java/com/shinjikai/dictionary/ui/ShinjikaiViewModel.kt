@@ -56,8 +56,10 @@ import java.io.FileInputStream
 import java.io.IOException
 import java.util.zip.ZipInputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -67,6 +69,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -82,7 +86,10 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     private val searchSpec = MutableStateFlow<SearchRequestSpec?>(null)
     private val searchRefreshNonce = MutableStateFlow(0)
     private var detailsLoadJob: Job? = null
+    private var dictionaryInstallJob: Job? = null
+    private val detailPrefetches = mutableMapOf<Int, Deferred<Result<WordDetailsResponse>>>()
     private var categoriesPreloadJob: Job? = null
+    private val bookmarkMutationMutex = Mutex()
     val settings: StateFlow<AppSettings> = settingsStore.settingsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, settingsStore.readCached())
 
@@ -117,6 +124,8 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
 
     val bookmarkPagingFlow: Flow<PagingData<BookmarkItem>> =
         bookmarkRepository.pagedFlow().cachedIn(viewModelScope)
+
+    private var bookmarkedIds by mutableStateOf<Set<Int>>(emptySet())
 
     val browsePagingFlow: Flow<PagingData<SearchItem>> = searchRefreshNonce
         .flatMapLatest {
@@ -198,7 +207,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             details = details,
             selectedItem = selectedItem,
             isBookmarked = selectedItem?.let { item ->
-                bookmarkedItems.any { it.id == item.id }
+                bookmarkedIds.contains(item.id)
             } == true,
             categoryNameById = categoryNameById,
             isImportingOfflineData = isImportingOfflineData,
@@ -264,6 +273,12 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             bookmarkedItems.clear()
             bookmarkedItems.addAll(bookmarkRepository.getAll())
+        }
+
+        viewModelScope.launch {
+            bookmarkRepository.observeBookmarkedIds().collect { ids ->
+                bookmarkedIds = ids
+            }
         }
 
         viewModelScope.launch {
@@ -366,7 +381,11 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         loadingDetails = true
 
         detailsLoadJob = viewModelScope.launch {
-            val result = repository.loadWordDetails(item.id)
+            // The bundled importer runs during startup. Keep the detail request in the
+            // loading state until the database has a consistent dictionary snapshot.
+            dictionaryInstallJob?.join()
+            val result = takePrefetchedDetails(item.id)?.await()
+                ?: repository.loadWordDetails(item.id)
             loadingDetails = false
             result.onSuccess { details = it }
                 .onFailure { detailsError = it.message ?: context.getString(R.string.error_details_load) }
@@ -376,6 +395,17 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openDetails(item: SearchItem) {
         openDetailsInternal(item)
+    }
+
+    fun prefetchDetails(id: Int) {
+        if (id <= 0) return
+        synchronized(detailPrefetches) {
+            if (detailPrefetches[id]?.isActive == true) return
+            detailPrefetches[id] = viewModelScope.async {
+                dictionaryInstallJob?.join()
+                repository.loadWordDetails(id)
+            }
+        }
     }
 
     fun openBookmarkedDetails(item: SearchItem) {
@@ -389,12 +419,18 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             val cached = withContext(Dispatchers.IO) {
                 bookmarkRepository.getSavedDetails(item.id)
             }
-            loadingDetails = false
             if (cached != null) {
                 details = cached
             } else {
-                detailsError = context.getString(R.string.error_bookmark_not_available_offline)
+                // Older database migrations could leave bookmarks without detailsJson.
+                // Recover from the installed local dictionary when possible.
+                repository.loadWordDetails(item.id)
+                    .onSuccess { details = it }
+                    .onFailure {
+                        detailsError = context.getString(R.string.error_bookmark_not_available_offline)
+                    }
             }
+            loadingDetails = false
         }
     }
 
@@ -409,12 +445,16 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 val cached = withContext(Dispatchers.IO) {
                     bookmarkRepository.getSavedDetails(item.id)
                 }
-                loadingDetails = false
                 if (cached != null) {
                     details = cached
                 } else {
-                    detailsError = context.getString(R.string.error_bookmark_not_available_offline)
+                    repository.loadWordDetails(item.id)
+                        .onSuccess { details = it }
+                        .onFailure {
+                            detailsError = context.getString(R.string.error_bookmark_not_available_offline)
+                        }
                 }
+                loadingDetails = false
             }
         } else {
             openDetailsInternal(item)
@@ -440,7 +480,9 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         loadingDetails = true
 
         detailsLoadJob = viewModelScope.launch {
-            val result = repository.loadWordDetails(id)
+            dictionaryInstallJob?.join()
+            val result = takePrefetchedDetails(id)?.await()
+                ?: repository.loadWordDetails(id)
             loadingDetails = false
             result.onSuccess { details = it }
                 .onFailure { detailsError = it.message ?: context.getString(R.string.error_details_load) }
@@ -462,46 +504,48 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleBookmark(item: SearchItem) {
         viewModelScope.launch {
-            val isBookmarked = bookmarkedItems.any { it.id == item.id }
-            if (isBookmarked) {
-                bookmarkRepository.deleteById(item.id)
-                bookmarkedItems.removeAll { it.id == item.id }
-            } else {
-                val existingDetails = details?.takeIf { it.word.id == item.id }
-                val detailsResult = existingDetails?.let { Result.success(it) }
-                    ?: repository.loadWordDetails(item.id)
+            bookmarkMutationMutex.withLock {
+                val isBookmarked = bookmarkedIds.contains(item.id)
+                if (isBookmarked) {
+                    bookmarkRepository.deleteById(item.id)
+                    bookmarkedItems.removeAll { it.id == item.id }
+                } else {
+                    val existingDetails = details?.takeIf { it.word.id == item.id }
+                    val detailsResult = existingDetails?.let { Result.success(it) }
+                        ?: repository.loadWordDetails(item.id)
 
-                detailsResult.onSuccess { response ->
-                    val existingCreatedAt = bookmarkedItems.firstOrNull { it.id == item.id }?.createdAt
-                        ?: java.util.Date().time
-                    val word = response.word
-                    val summaryFromDetails = word.meanings
-                        .asSequence()
-                        .map { it.arabic.trim() }
-                        .firstOrNull { it.isNotBlank() }
-                        .orEmpty()
+                    detailsResult.onSuccess { response ->
+                        val existingCreatedAt = bookmarkedItems.firstOrNull { it.id == item.id }?.createdAt
+                            ?: java.util.Date().time
+                        val word = response.word
+                        val summaryFromDetails = word.meanings
+                            .asSequence()
+                            .map { it.arabic.trim() }
+                            .firstOrNull { it.isNotBlank() }
+                            .orEmpty()
 
-                    val normalizedItem = SearchItem(
-                        id = word.id,
-                        kana = word.kana,
-                        writings = word.writings,
-                        meaningSummary = item.meaningSummary.ifBlank { summaryFromDetails },
-                        jlpt = word.jlpt,
-                        difficulty = word.difficulty
-                    )
+                        val normalizedItem = SearchItem(
+                            id = word.id,
+                            kana = word.kana,
+                            writings = word.writings,
+                            meaningSummary = item.meaningSummary.ifBlank { summaryFromDetails },
+                            jlpt = word.jlpt,
+                            difficulty = word.difficulty
+                        )
 
-                    bookmarkRepository.upsertWithDetails(normalizedItem, response)
-                    bookmarkedItems.removeAll { it.id == normalizedItem.id }
-                    bookmarkedItems.add(
-                        0,
-                        BookmarkItem(item = normalizedItem, createdAt = existingCreatedAt)
-                    )
-                }.onFailure { throwable ->
-                    Toast.makeText(
-                        context,
-                        throwable.message ?: context.getString(R.string.error_bookmark_save),
-                        Toast.LENGTH_LONG
-                    ).show()
+                        bookmarkRepository.upsertWithDetails(normalizedItem, response)
+                        bookmarkedItems.removeAll { it.id == normalizedItem.id }
+                        bookmarkedItems.add(
+                            0,
+                            BookmarkItem(item = normalizedItem, createdAt = existingCreatedAt)
+                        )
+                    }.onFailure { throwable ->
+                        Toast.makeText(
+                            context,
+                            throwable.message ?: context.getString(R.string.error_bookmark_save),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             }
         }
@@ -574,7 +618,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun installBundledDictionaryIfNeeded(force: Boolean = false) {
         if (!bundledDictionaryInstaller.hasBundledDictionary() || isImportingOfflineData) return
-        viewModelScope.launch {
+        dictionaryInstallJob = viewModelScope.launch {
             isImportingOfflineData = true
             offlineImportError = false
             offlineImportStatus = null
@@ -703,6 +747,9 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                 refreshOfflineTermCount()
                 registerInstalledDictionary(uri)
                 refreshOfflinePreview()
+                // Any PagingSource that loaded during the import may have cached an
+                // empty first page. Recreate it now that the new source is committed.
+                dictionarySource = createDictionarySource()
                 if (settings.value.useOfflineMode) {
                     viewModelScope.launch { ensureCategoriesPreloadedIfNeeded() }
                 }
@@ -716,6 +763,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setDictionaryEnabled(dictionaryId: String, enabled: Boolean) {
+        if (dictionaryId == BundledDictionaryInstaller.BUNDLED_SOURCE_LABEL) return
         val item = installedDictionaries.firstOrNull { it.id == dictionaryId } ?: return
         val sourceKey = item.sourceKey ?: sourceKeyForPickedArchive(item.fileName.orEmpty())
         installedDictionaryStore.setEnabled(dictionaryId, enabled)
@@ -1033,6 +1081,12 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun createDictionarySource(): DictionarySource {
         return LocalYomitanSource(database.yomitanDao())
+    }
+
+    private fun takePrefetchedDetails(id: Int): Deferred<Result<WordDetailsResponse>>? {
+        return synchronized(detailPrefetches) {
+            detailPrefetches.remove(id)
+        }
     }
 
     private fun invalidateSearchAndBrowsePaging() {

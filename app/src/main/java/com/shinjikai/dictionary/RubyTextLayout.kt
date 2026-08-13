@@ -14,6 +14,7 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
@@ -34,10 +35,13 @@ internal fun RubyTextLayout(
     rubyColor: (RubyTextSegment) -> Color,
     modifier: Modifier = Modifier,
     textAlign: TextAlign = TextAlign.Start,
+    // A small overlap counteracts font metrics so kana sits visibly close
+    // to the kanji without changing the surrounding layout.
+    rubyBaseGap: Dp = (-4).dp,
     onWordClick: ((Int) -> Unit)? = null
 ) {
     val rowGapPx = with(LocalDensity.current) { 5.dp.roundToPx() }
-    val maxRubyOverlapPx = with(LocalDensity.current) { 24.dp.roundToPx() }
+    val rubyBaseGapPx = with(LocalDensity.current) { rubyBaseGap.roundToPx() }
     val compactBaseStyle = baseStyle.withoutFontPadding()
     val compactRubyStyle = rubyStyle.withoutFontPadding()
 
@@ -140,8 +144,8 @@ internal fun RubyTextLayout(
                 val rowItems = row.flatMap { it.items }
                 val rubyLaneHeight = rowItems.maxOfOrNull { if (it.hasRuby) it.ruby.height else 0 } ?: 0
                 val baseLaneHeight = rowItems.maxOfOrNull { it.base.height } ?: 0
-                val rubyOverlap = ((rubyLaneHeight * 92) / 100).coerceAtMost(maxRubyOverlapPx)
-                val rubyBlockHeight = (rubyLaneHeight - rubyOverlap).coerceAtLeast(0)
+                // Keep a real, shared gap between the kana lane and the kanji lane.
+                val rubyBlockHeight = rubyLaneHeight + rubyBaseGapPx
                 row.forEach { run ->
                     run.items.forEach { item ->
                         placed += PlacedRubyItem(

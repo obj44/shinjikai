@@ -31,9 +31,9 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -58,7 +58,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -113,7 +113,7 @@ fun ShinjikaiApp(
     val focusManager = LocalFocusManager.current
     val clipboardManager = LocalClipboardManager.current
     val viewModel: ShinjikaiViewModel = viewModel()
-    val settings by viewModel.settings.collectAsState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentScreen = backStackEntry?.destination?.route.toScreen()
@@ -189,36 +189,6 @@ fun ShinjikaiApp(
                             .statusBarsPadding()
                     ) {
                         composable(
-                            route = AppRoute.Search.route,
-                            deepLinks = listOf(
-                                navDeepLink {
-                                    uriPattern = "shinjikai://app/search"
-                                },
-                                navDeepLink {
-                                    uriPattern = "https://shinjikai.app/search"
-                                }
-                            ),
-                            enterTransition = { primaryEnterTransition() },
-                            exitTransition = { primaryExitTransition() },
-                            popEnterTransition = { primaryPopEnterTransition() },
-                            popExitTransition = { primaryPopExitTransition() }
-                        ) {
-                            SearchScreenContent(
-                                appName = appName,
-                                useOfflineMode = settings.useOfflineMode,
-                                hasOfflineDictionary = viewModel.settingsUiState.offlineTermCount > 0,
-                                searchFocusNonce = viewModel.searchFocusNonce,
-                                viewModel = viewModel,
-                                uiState = viewModel.searchUiState,
-                                searchResults = viewModel.searchResults,
-                                onRetryBundledImport = viewModel::retryBundledDictionaryInstall,
-                                onOpenDetails = {
-                                    focusManager.clearFocus()
-                                    navController.navigate(buildDetailRoute(it.id))
-                                }
-                            )
-                        }
-                        composable(
                             route = "${AppRoute.Search.route}?${AppRoute.SEARCH_QUERY_ARG}={${AppRoute.SEARCH_QUERY_ARG}}",
                             arguments = listOf(
                                 navArgument(AppRoute.SEARCH_QUERY_ARG) {
@@ -228,6 +198,12 @@ fun ShinjikaiApp(
                                 }
                             ),
                             deepLinks = listOf(
+                                navDeepLink {
+                                    uriPattern = "shinjikai://app/search"
+                                },
+                                navDeepLink {
+                                    uriPattern = "https://shinjikai.app/search"
+                                },
                                 navDeepLink {
                                     uriPattern = "shinjikai://app/search?${AppRoute.SEARCH_QUERY_ARG}={${AppRoute.SEARCH_QUERY_ARG}}"
                                 },
@@ -239,7 +215,7 @@ fun ShinjikaiApp(
                             exitTransition = { primaryExitTransition() },
                             popEnterTransition = { primaryPopEnterTransition() },
                             popExitTransition = { primaryPopExitTransition() }
-                        ) { entry ->
+                            ) { entry ->
                             val incomingQuery = entry.arguments?.getString(AppRoute.SEARCH_QUERY_ARG)?.trim().orEmpty()
                             LaunchedEffect(incomingQuery) {
                                 if (incomingQuery.isNotBlank() && incomingQuery != viewModel.activeResultQuery) {
@@ -257,6 +233,7 @@ fun ShinjikaiApp(
                                 onRetryBundledImport = viewModel::retryBundledDictionaryInstall,
                                 onOpenDetails = {
                                     focusManager.clearFocus()
+                                    viewModel.prefetchDetails(it.id)
                                     navController.navigate(buildDetailRoute(it.id))
                                 }
                             )
@@ -273,6 +250,7 @@ fun ShinjikaiApp(
                                 totalEntries = viewModel.settingsUiState.offlineTermCount,
                                 onOpenDetails = {
                                     focusManager.clearFocus()
+                                    viewModel.prefetchDetails(it.id)
                                     navController.navigate(buildDetailRoute(it.id))
                                 }
                             )
@@ -334,7 +312,13 @@ fun ShinjikaiApp(
                                 }
                             )
                         }
-                        composable(AppRoute.LocalDictionary.route) {
+                        composable(
+                            AppRoute.LocalDictionary.route,
+                            enterTransition = { detailEnterTransition() },
+                            exitTransition = { detailExitTransition() },
+                            popEnterTransition = { detailPopEnterTransition() },
+                            popExitTransition = { detailPopExitTransition() }
+                        ) {
                             LocalDictionaryScreenContent(
                                 uiState = viewModel.settingsUiState,
                                 onPickOfflineZip = {
@@ -353,7 +337,13 @@ fun ShinjikaiApp(
                                 onGoBack = { navController.popBackStack() }
                             )
                         }
-                        composable(AppRoute.AnkiExporterSettings.route) {
+                        composable(
+                            AppRoute.AnkiExporterSettings.route,
+                            enterTransition = { detailEnterTransition() },
+                            exitTransition = { detailExitTransition() },
+                            popEnterTransition = { detailPopEnterTransition() },
+                            popExitTransition = { detailPopExitTransition() }
+                        ) {
                             AnkiExporterSettingsScreenContent(
                                 selectedDeckName = viewModel.settingsUiState.settings.selectedAnkiDeckName,
                                 onSelectDeck = viewModel::setSelectedAnkiDeckName,
@@ -424,10 +414,12 @@ fun ShinjikaiApp(
                                     }
                                 },
                                 onOpenGlossaryReference = { referenceId ->
+                                    viewModel.prefetchDetails(referenceId)
                                     navController.navigate(buildDetailRoute(referenceId))
                                 },
                                 onOpenRelatedWord = { relatedItem ->
                                     if (relatedItem.wordId > 0) {
+                                        viewModel.prefetchDetails(relatedItem.wordId)
                                         navController.navigate(buildDetailRoute(relatedItem.wordId))
                                     } else {
                                         val lookupTerm = relatedItem.text.ifBlank { relatedItem.kana }.trim()
@@ -854,8 +846,7 @@ private fun DetailScreenContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
+                .padding(16.dp),
             useOfflineMode = useOfflineMode,
             detailState = detailState,
             onSpeakJapaneseText = onSpeakJapaneseText,
@@ -903,53 +894,37 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.primarySlideDirect
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryEnterTransition() =
-    slideIntoContainer(
-        towards = primarySlideDirection(),
-        animationSpec = tween(240),
-        initialOffset = { fullSize -> fullSize / 16 }
-    ) + fadeIn(animationSpec = tween(210, delayMillis = 40))
+    fadeIn(animationSpec = tween(140))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryExitTransition() =
-    slideOutOfContainer(
-        towards = primarySlideDirection(),
-        animationSpec = tween(200),
-        targetOffset = { fullSize -> -fullSize / 20 }
-    ) + fadeOut(animationSpec = tween(120))
+    fadeOut(animationSpec = tween(100))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryPopEnterTransition() =
-    slideIntoContainer(
-        towards = primarySlideDirection(),
-        animationSpec = tween(240),
-        initialOffset = { fullSize -> fullSize / 16 }
-    ) + fadeIn(animationSpec = tween(210, delayMillis = 40))
+    fadeIn(animationSpec = tween(140))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryPopExitTransition() =
-    slideOutOfContainer(
-        towards = primarySlideDirection(),
-        animationSpec = tween(200),
-        targetOffset = { fullSize -> -fullSize / 20 }
-    ) + fadeOut(animationSpec = tween(120))
+    fadeOut(animationSpec = tween(100))
 
 private fun AnimatedContentTransitionScope<*>.detailEnterTransition() =
     slideIntoContainer(
         towards = AnimatedContentTransitionScope.SlideDirection.Start,
-        animationSpec = tween(220)
-    ) + fadeIn(animationSpec = tween(180))
+        animationSpec = tween(160)
+    ) + fadeIn(animationSpec = tween(140))
 
 private fun AnimatedContentTransitionScope<*>.detailExitTransition() =
     slideOutOfContainer(
         towards = AnimatedContentTransitionScope.SlideDirection.Start,
-        animationSpec = tween(180)
-    ) + fadeOut(animationSpec = tween(140))
+        animationSpec = tween(140)
+    ) + fadeOut(animationSpec = tween(100))
 
 private fun AnimatedContentTransitionScope<*>.detailPopEnterTransition() =
     slideIntoContainer(
         towards = AnimatedContentTransitionScope.SlideDirection.End,
-        animationSpec = tween(220)
-    ) + fadeIn(animationSpec = tween(180))
+        animationSpec = tween(160)
+    ) + fadeIn(animationSpec = tween(140))
 
 private fun AnimatedContentTransitionScope<*>.detailPopExitTransition() =
     slideOutOfContainer(
         towards = AnimatedContentTransitionScope.SlideDirection.End,
-        animationSpec = tween(180)
-    ) + fadeOut(animationSpec = tween(140))
+        animationSpec = tween(140)
+    ) + fadeOut(animationSpec = tween(100))

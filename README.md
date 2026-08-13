@@ -2,8 +2,7 @@
 
 [English](./README.md) | [العربية](./README.ar.md)
 
-Android app (Kotlin + Jetpack Compose) for Japanese to Arabic dictionary lookup using the Shinjikai API:  
-`https://shinjikai.app`
+Japanese–Arabic dictionary for Android, built with Kotlin and Jetpack Compose. Dictionary data is indexed locally so search and word lookup work entirely offline.
 
 ## 📱 Screenshots
 
@@ -13,10 +12,9 @@ Android app (Kotlin + Jetpack Compose) for Japanese to Arabic dictionary lookup 
 </p>
 
 
-## ℹ️ Disclaimer
-
-This app is an independent project and is not officially affiliated with Shinjikai.  
-It uses the API provided by [shinjikai.app](https://shinjikai.app), and full credit for the dictionary data and its development goes to the Shinjikai website maintainers.
+> ⚠️ **Disclaimer**
+>
+> This is an independent project and is not officially affiliated with the Shinjikai website. The bundled dictionary data comes from [1Selxo/Shinjikai](https://github.com/1Selxo/Shinjikai), and credit for that data belongs to its original contributors.
 
 ## ✨ Features
 
@@ -29,24 +27,15 @@ It uses the API provided by [shinjikai.app](https://shinjikai.app), and full cre
   - related words section (synonyms, antonyms, and related links when available)
 - 🔖 Bookmarks (save and manage words)
 - 🕘 Recent searches
-- 🌐 Online mode (Shinjikai RPC API)
-- 📦 Offline mode with local Yomitan dictionary import
+- 📦 Fully offline search with bundled data and local Yomitan dictionary imports
 - 🎨 Material 3 UI with dark/light theme support
-
-## 🧠 API Endpoints Used
-
-- `POST /rpc/SearchWords`
-- `POST /rpc/LoadWordDetails`
-- `POST /rpc/LoadCategories`
-
-Request headers include `X-Client-Id` as required by the backend.
 
 ## 🛠️ Tech Stack
 
 - Kotlin
 - Jetpack Compose (Material 3)
-- Retrofit + OkHttp + Gson
-- Room (local database for offline dictionary + bookmarks)
+- Gson
+- Room with FTS (local dictionary and bookmarks)
 - Coroutines
 
 ## ▶️ Run the App
@@ -64,18 +53,17 @@ Request headers include `X-Client-Id` as required by the backend.
 ## 🗂️ Project Structure
 
 - `app/src/main/java/com/shinjikai/dictionary/` -> UI and app flow
-- `app/src/main/java/com/shinjikai/dictionary/data/` -> API models, repository, bundled importer, Room, and offline source
+- `app/src/main/java/com/shinjikai/dictionary/data/` -> dictionary models, repositories, importers, Room, and local search
 - `app/src/main/res/` -> resources (strings, themes, icons, fonts)
 
 ## 🙌 Credits
 
 - Dictionary data: **1Selxo/Shinjikai** (`https://github.com/1Selxo/Shinjikai`)
 - Japanese deinflection transforms: **Yomitan** (`https://github.com/yomidevs/yomitan/tree/master/ext/js/language/ja`), GPL-3.0-or-later.
-- The default offline source archive URL points to the `a-hamdi/japanesearabic` dataset used by the app importer.
 
 ## Bundled Dictionary Assets
 
-The app ships the `1Selxo/Shinjikai` dictionary locally instead of using the Shinjikai API. Run:
+The app ships the `1Selxo/Shinjikai` dictionary locally. To refresh the bundled assets, run:
 
 ```powershell
 .\scripts\fetch-bundled-dictionary.ps1

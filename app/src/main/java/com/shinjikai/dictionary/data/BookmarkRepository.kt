@@ -8,6 +8,8 @@ import com.google.gson.Gson
 import java.io.File
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class BookmarkRepository(
     private val bookmarkDao: BookmarkDao,
@@ -50,14 +52,16 @@ class BookmarkRepository(
 
     suspend fun upsertWithDetails(item: SearchItem, details: WordDetailsResponse) {
         val createdAt = bookmarkDao.getCreatedAt(item.id) ?: java.util.Date().time
-        val normalizedDetails = details.withCanonicalPictureElements()
+        val detailsJson = withContext(Dispatchers.Default) {
+            gson.toJson(details.withCanonicalPictureElements())
+        }
         bookmarkDao.upsert(
             BookmarkEntity(
                 id = item.id,
                 primaryWriting = item.primaryWriting,
                 kana = item.kana,
                 meaningSummary = item.meaningSummary,
-                detailsJson = gson.toJson(normalizedDetails),
+                detailsJson = detailsJson,
                 detailsSavedAt = java.util.Date().time,
                 createdAt = createdAt
             )
