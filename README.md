@@ -4,6 +4,15 @@
 
 Japanese–Arabic dictionary for Android, built with Kotlin and Jetpack Compose. Dictionary data is indexed locally so search and word lookup work entirely offline.
 
+<p align="center">
+  <a href="https://play.google.com/store/apps/details?id=com.shinjikai.dictionary">
+    <img src="https://img.shields.io/badge/Google%20Play-Available-414141?logo=googleplay&logoColor=white&style=for-the-badge" alt="Get it on Google Play" height="40" />
+  </a>
+  <a href="#" aria-label="F-Droid coming soon">
+    <img src="https://img.shields.io/badge/F--Droid-Coming%20soon-1976D2?logo=f-droid&logoColor=white&style=for-the-badge" alt="F-Droid coming soon" height="40" />
+  </a>
+</p>
+
 ## 📱 Screenshots
 
 <p align="center">
@@ -28,6 +37,7 @@ Japanese–Arabic dictionary for Android, built with Kotlin and Jetpack Compose.
 - 🔖 Bookmarks (save and manage words)
 - 🕘 Recent searches
 - 📦 Fully offline search with bundled data and local Yomitan dictionary imports
+- 🃏 Anki exporter to send words and definitions from the app to Anki
 - 🎨 Material 3 UI with dark/light theme support
 
 ## 🛠️ Tech Stack
@@ -61,7 +71,7 @@ Japanese–Arabic dictionary for Android, built with Kotlin and Jetpack Compose.
 - Dictionary data: **1Selxo/Shinjikai** (`https://github.com/1Selxo/Shinjikai`)
 - Japanese deinflection transforms: **Yomitan** (`https://github.com/yomidevs/yomitan/tree/master/ext/js/language/ja`), GPL-3.0-or-later.
 
-## Bundled Dictionary Assets
+## 📦 Bundled Dictionary Assets
 
 The app ships the `1Selxo/Shinjikai` dictionary locally. To refresh the bundled assets, run:
 
