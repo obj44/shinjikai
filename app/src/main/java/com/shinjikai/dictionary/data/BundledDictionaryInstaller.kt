@@ -3,6 +3,7 @@ package com.shinjikai.dictionary.data
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import com.shinjikai.dictionary.R
 import java.io.File
 import java.io.InputStream
 import java.io.SequenceInputStream
@@ -67,7 +68,7 @@ class BundledDictionaryInstaller(
                     )
                 }
 
-                onProgress("Indexing bundled Shinjikai dictionary", 0.08f)
+                onProgress(context.getString(R.string.offline_import_phase_index), 0.08f)
                 Log.i(TAG, "Starting bundled dictionary import. imageRoot=$imageRoot")
                 val importedCount = importer.importFromJsonLineStreams(
                     sources = jsonlPaths.map { path ->
@@ -83,7 +84,7 @@ class BundledDictionaryInstaller(
                 imageRoot?.let { root ->
                     dao.upsertMeta(YomitanMetaEntity(key = OFFLINE_IMAGE_DIR_META_KEY, value = root))
                 }
-                onProgress("Bundled dictionary ready", 1f)
+                onProgress(context.getString(R.string.offline_import_phase_ready), 1f)
 
                 BundledDictionaryInstallResult(
                     available = true,
@@ -185,7 +186,7 @@ class BundledDictionaryInstaller(
             )
         }
 
-        onProgress("Installing bundled Shinjikai images", 0.04f)
+        onProgress(context.getString(R.string.offline_import_phase_images), 0.04f)
         val stagingRoot = File(context.filesDir, "offline-image-staging")
         try {
             if (stagingRoot.exists()) {

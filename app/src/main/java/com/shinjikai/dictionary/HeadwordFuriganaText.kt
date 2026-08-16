@@ -29,11 +29,13 @@ internal fun HeadwordFuriganaText(
     val cleanText = text.trim()
     if (cleanText.isBlank()) return
 
-    val segments = remember(cleanText, reading, parts) {
-        buildHeadwordFuriganaSegments(
+    val cleanReading = reading.trim()
+    val writingParts = parts.orEmpty()
+    val segments = remember(cleanText, cleanReading, writingParts) {
+        HeadwordFuriganaSegmentCache.getOrPut(
             text = cleanText,
-            reading = reading.trim(),
-            parts = parts.orEmpty()
+            reading = cleanReading,
+            parts = writingParts
         )
     }
     if (segments.none { !it.ruby.isNullOrBlank() }) {
@@ -75,6 +77,42 @@ internal data class HeadwordRubySegment(
     val base: String,
     val ruby: String?
 )
+
+/**
+ * Keeps parsed headwords available after a lazy-list item or navigation destination leaves
+ * composition. Compose's [remember] only covers the lifetime of one composed card, while this
+ * bounded process cache avoids repeating the alignment work when users return to a tab.
+ */
+private object HeadwordFuriganaSegmentCache {
+    private const val MaxEntries = 512
+
+    private data class Key(
+        val text: String,
+        val reading: String,
+        val parts: List<WritingPart>
+    )
+
+    private val entries = object : LinkedHashMap<Key, List<HeadwordRubySegment>>(
+        MaxEntries,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<Key, List<HeadwordRubySegment>>
+        ): Boolean = size > MaxEntries
+    }
+
+    @Synchronized
+    fun getOrPut(
+        text: String,
+        reading: String,
+        parts: List<WritingPart>
+    ): List<HeadwordRubySegment> {
+        val key = Key(text = text, reading = reading, parts = parts.toList())
+        return entries[key] ?: buildHeadwordFuriganaSegments(text, reading, parts)
+            .also { entries[key] = it }
+    }
+}
 
 private data class HeadwordRubyToken(
     val base: String,

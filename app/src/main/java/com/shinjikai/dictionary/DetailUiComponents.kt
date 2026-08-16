@@ -111,7 +111,6 @@ private data class DefinitionTextSegment(val text: String, val referenceId: Int?
 
 private const val GLOSSARY_REFERENCE_ANNOTATION_TAG = "glossary_reference"
 private const val NO_BREAK_JOINER = "\u2060"
-private const val RELATED_WORDS_PAGE_SIZE = 5
 private const val EXAMPLES_PAGE_SIZE = 3
 private val MEANING_BULLET_PREFIX_REGEX =
     Regex("(?m)^\\s*[\\uD83D\\uDD39\\u25AA\\u2022\\u25CF\\u25E6]\\s*")
@@ -374,7 +373,6 @@ fun DetailScreenBody(
                 RelatedWordsCard(
                 title = stringResource(R.string.detail_similar_words_title),
                 items = relatedItems,
-                expandAllByDefault = true,
                 onWordClick = {
                     focusManager.clearFocus()
                     onOpenRelatedWord(it)
@@ -388,7 +386,6 @@ fun DetailScreenBody(
                 RelatedWordsCard(
                 title = stringResource(R.string.detail_homophones_title),
                 items = homophones,
-                expandAllByDefault = true,
                 onWordClick = {
                     focusManager.clearFocus()
                     onOpenRelatedWord(it)
@@ -411,7 +408,6 @@ fun DetailScreenBody(
                 ExamplesCard(
                 title = stringResource(R.string.detail_additional_examples_title),
                 items = examples,
-                showAllByDefault = false,
                 onWordClick = { wordId ->
                     focusManager.clearFocus()
                     onOpenGlossaryReference(wordId)
@@ -1298,7 +1294,6 @@ private fun MeaningRelatedGroupSection(
     group: RelatedGroup,
     onRelatedWordClick: (RelatedWordItem) -> Unit
 ) {
-    var expanded by remember(group.label, group.items) { mutableStateOf(false) }
     val title = group.label.ifBlank { stringResource(R.string.detail_related_words_title) }
     val visibleItems = group.items.filter { it.text.isNotBlank() || it.kana.isNotBlank() }
 
@@ -1311,7 +1306,6 @@ private fun MeaningRelatedGroupSection(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button) { expanded = !expanded }
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1326,25 +1320,18 @@ private fun MeaningRelatedGroupSection(
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text(
-                    text = if (expanded) stringResource(R.string.detail_show_less) else stringResource(R.string.detail_show_more),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
             }
-            if (expanded) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    visibleItems.forEach { relatedWord ->
-                        ShinjikaiChip(
-                            text = relatedWord.text.ifBlank { relatedWord.kana },
-                            onClick = { onRelatedWordClick(relatedWord) },
-                            selected = false
-                        )
-                    }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                visibleItems.forEach { relatedWord ->
+                    ShinjikaiChip(
+                        text = relatedWord.text.ifBlank { relatedWord.kana },
+                        onClick = { onRelatedWordClick(relatedWord) },
+                        selected = false
+                    )
                 }
             }
         }
@@ -1661,13 +1648,8 @@ private fun ZoomableImageDialog(
 private fun RelatedWordsCard(
     title: String,
     items: List<RelatedWordItem>,
-    expandAllByDefault: Boolean = false,
     onWordClick: (RelatedWordItem) -> Unit
 ) {
-    var expanded by remember(items, expandAllByDefault) { mutableStateOf(expandAllByDefault) }
-    var visibleCount by remember(items, expandAllByDefault) {
-        mutableStateOf(if (expandAllByDefault) items.size else RELATED_WORDS_PAGE_SIZE.coerceAtMost(items.size))
-    }
     val wordFallback = stringResource(R.string.detail_word_fallback)
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1677,44 +1659,17 @@ private fun RelatedWordsCard(
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(text = title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
-            if (expanded) {
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items.take(visibleCount).forEach { item ->
-                        ShinjikaiChip(
-                            text = item.text.ifBlank { item.kana.ifBlank { wordFallback.format(item.wordId) } },
-                            onClick = { onWordClick(item) },
-                            selected = false
-                        )
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (visibleCount < items.size) {
-                        TextButton(onClick = { visibleCount = (visibleCount + RELATED_WORDS_PAGE_SIZE).coerceAtMost(items.size) }) {
-                            Text(stringResource(R.string.detail_show_more))
-                        }
-                    } else {
-                        Spacer(modifier = Modifier)
-                    }
-                    TextButton(onClick = { expanded = false }) {
-                        Text(stringResource(R.string.detail_card_collapse))
-                    }
-                }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = { expanded = true }) {
-                        Text(stringResource(R.string.detail_show_more))
-                    }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items.forEach { item ->
+                    ShinjikaiChip(
+                        text = item.text.ifBlank { item.kana.ifBlank { wordFallback.format(item.wordId) } },
+                        onClick = { onWordClick(item) },
+                        selected = false
+                    )
                 }
             }
         }
@@ -1725,7 +1680,6 @@ private fun RelatedWordsCard(
 private fun ExamplesCard(
     title: String,
     items: List<SentenceExample>,
-    showAllByDefault: Boolean = false,
     onWordClick: (Int) -> Unit
 ) {
     Column(
@@ -1740,7 +1694,7 @@ private fun ExamplesCard(
         )
         ExampleList(
             items = items,
-            initiallyVisible = if (showAllByDefault) items.size else EXAMPLES_PAGE_SIZE,
+            initiallyVisible = items.size,
             onWordClick = onWordClick
         )
     }

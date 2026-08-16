@@ -131,9 +131,9 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         .flatMapLatest {
             Pager(
                 config = PagingConfig(
-                    pageSize = 60,
-                    initialLoadSize = 90,
-                    prefetchDistance = 30,
+                    pageSize = 30,
+                    initialLoadSize = 30,
+                    prefetchDistance = 10,
                     enablePlaceholders = false
                 ),
                 pagingSourceFactory = { BrowsePagingSource(database.yomitanDao()) }
@@ -250,7 +250,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
                     InstalledDictionaryUiItem(
                         id = "bundled-1selxo-shinjikai-jsonl",
                         name = "Shinjikai",
-                        source = "Bundled dictionary",
+                        source = context.getString(R.string.settings_bundled_dictionary_source),
                         sourceKey = BundledDictionaryInstaller.BUNDLED_SOURCE_LABEL,
                         isBuiltIn = true
                     )

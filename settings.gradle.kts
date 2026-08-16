@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ShinjikaiDictionary"
 include(":app")
+include(":baselineprofile")

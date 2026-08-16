@@ -11,8 +11,6 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -143,10 +141,6 @@ fun ShinjikaiApp(
         }
     }
     val japaneseTextToSpeech = rememberJapaneseTextToSpeechController()
-
-    LaunchedEffect(currentScreen) {
-        if (currentScreen == Screen.Settings) viewModel.refreshOfflineTermCount()
-    }
 
     LaunchedEffect(externalSearchTerm) {
         val incoming = externalSearchTerm?.trim().orEmpty()
@@ -894,16 +888,16 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.primarySlideDirect
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryEnterTransition() =
-    fadeIn(animationSpec = tween(140))
+    fadeIn(animationSpec = tween(durationMillis = 85, delayMillis = 25))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryExitTransition() =
-    fadeOut(animationSpec = tween(100))
+    fadeOut(animationSpec = tween(durationMillis = 60))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryPopEnterTransition() =
-    fadeIn(animationSpec = tween(140))
+    fadeIn(animationSpec = tween(durationMillis = 85, delayMillis = 25))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryPopExitTransition() =
-    fadeOut(animationSpec = tween(100))
+    fadeOut(animationSpec = tween(durationMillis = 60))
 
 private fun AnimatedContentTransitionScope<*>.detailEnterTransition() =
     slideIntoContainer(

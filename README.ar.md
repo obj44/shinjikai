@@ -5,12 +5,8 @@
 <div dir="rtl" align="right">
 
 <p align="center">
-  <a href="https://play.google.com/store/apps/details?id=com.shinjikai.dictionary">
-    <img src="https://img.shields.io/badge/Google%20Play-Available-414141?logo=googleplay&logoColor=white&style=for-the-badge" alt="Get it on Google Play" height="40" />
-  </a>
-  <a href="#" aria-label="F-Droid coming soon">
-    <img src="https://img.shields.io/badge/F--Droid-Coming%20soon-1976D2?logo=f-droid&logoColor=white&style=for-the-badge" alt="F-Droid coming soon" height="40" />
-  </a>
+  <a href="https://play.google.com/store/apps/details?id=com.shinjikai.dictionary"><img src="https://img.shields.io/badge/Google%20Play-Available-414141?logo=googleplay&logoColor=white&style=for-the-badge" alt="Get it on Google Play" height="40" /></a>
+  <a href="#" aria-label="F-Droid coming soon"><img src="https://img.shields.io/badge/F--Droid-Coming%20soon-1976D2?logo=f-droid&logoColor=white&style=for-the-badge" alt="F-Droid coming soon" height="40" /></a>
 </p>
 
 قاموس ياباني–عربي لنظام أندرويد مبني باستخدام Kotlin وJetpack Compose. تتم فهرسة بيانات القاموس محليًا، لذلك يعمل البحث وعرض الكلمات بالكامل دون اتصال بالإنترنت.

@@ -3,6 +3,7 @@
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("androidx.baselineprofile")
 }
 
 android {
@@ -31,6 +32,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
 
@@ -86,13 +92,13 @@ dependencies {
     implementation("androidx.room:room-paging:2.7.2")
     implementation("androidx.paging:paging-runtime-ktx:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     kapt("androidx.room:room-compiler:2.7.2")
+
+    baselineProfile(project(":baselineprofile"))
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
-    androidTestImplementation("androidx.benchmark:benchmark-macro-junit4:1.3.4")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
