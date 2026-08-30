@@ -1,13 +1,20 @@
 package com.shinjikai.dictionary
 
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import android.speech.tts.TextToSpeech
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -128,7 +135,7 @@ fun ShinjikaiApp(
         }.getOrDefault("v1.0")
     }
     val pickOfflineZipLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
+        contract = OpenZipDocumentContract
     ) { uri ->
         if (uri != null) {
             runCatching {
@@ -316,15 +323,7 @@ fun ShinjikaiApp(
                             LocalDictionaryScreenContent(
                                 uiState = viewModel.settingsUiState,
                                 onPickOfflineZip = {
-                                    pickOfflineZipLauncher.launch(
-                                        arrayOf(
-                                            "application/zip",
-                                            "application/x-xz",
-                                            "application/x-gtar",
-                                            "application/octet-stream",
-                                            "*/*"
-                                        )
-                                    )
+                                    pickOfflineZipLauncher.launch(Unit)
                                 },
                                 onToggleDictionary = viewModel::setDictionaryEnabled,
                                 onDeleteDictionary = viewModel::deleteDictionary,
@@ -855,6 +854,18 @@ private fun DetailScreenContent(
     }
 }
 
+private object OpenZipDocumentContract : ActivityResultContract<Unit, Uri?>() {
+    override fun createIntent(context: Context, input: Unit): Intent {
+        return Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/zip")
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? {
+        return intent?.data?.takeIf { resultCode == Activity.RESULT_OK }
+    }
+}
+
 private fun NavHostController.navigateToPrimary(route: AppRoute, targetRoute: String = route.route) {
     val startDestinationId = graph.startDestinationId
     navigate(targetRoute) {
@@ -869,12 +880,12 @@ private fun NavHostController.navigateToPrimary(route: AppRoute, targetRoute: St
 }
 
 private fun primaryRouteIndex(screen: Screen?): Int = when (screen) {
-    Screen.Search -> 0
-    Screen.Browse -> 1
-    Screen.History -> 2
+    Screen.Browse -> 0
+    Screen.History -> 1
+    Screen.Search -> 2
     Screen.Bookmarks -> 3
     Screen.Settings -> 4
-    else -> 0
+    else -> 2
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primarySlideDirection(): AnimatedContentTransitionScope.SlideDirection {
@@ -888,16 +899,36 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.primarySlideDirect
 }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryEnterTransition() =
-    fadeIn(animationSpec = tween(durationMillis = 85, delayMillis = 25))
+    slideIntoContainer(
+        towards = primarySlideDirection(),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = 500f
+        ),
+        initialOffset = { distance -> distance / 7 }
+    ) + fadeIn(
+        animationSpec = tween(
+            durationMillis = 190,
+            delayMillis = 35,
+            easing = LinearOutSlowInEasing
+        )
+    )
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryExitTransition() =
-    fadeOut(animationSpec = tween(durationMillis = 60))
+    slideOutOfContainer(
+        towards = primarySlideDirection(),
+        animationSpec = tween(
+            durationMillis = 220,
+            easing = FastOutSlowInEasing
+        ),
+        targetOffset = { distance -> distance / 9 }
+    ) + fadeOut(animationSpec = tween(durationMillis = 135))
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryPopEnterTransition() =
-    fadeIn(animationSpec = tween(durationMillis = 85, delayMillis = 25))
+    primaryEnterTransition()
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.primaryPopExitTransition() =
-    fadeOut(animationSpec = tween(durationMillis = 60))
+    primaryExitTransition()
 
 private fun AnimatedContentTransitionScope<*>.detailEnterTransition() =
     slideIntoContainer(

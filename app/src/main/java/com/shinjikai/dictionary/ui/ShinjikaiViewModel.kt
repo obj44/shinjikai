@@ -44,7 +44,6 @@ import com.shinjikai.dictionary.data.YomitanMetaEntity
 import com.shinjikai.dictionary.data.YomitanImporter
 import com.shinjikai.dictionary.data.detectOfflineArchiveKind
 import com.shinjikai.dictionary.data.extractOfflineArchive
-import com.shinjikai.dictionary.data.extractTarXzStream
 import com.shinjikai.dictionary.data.extractZipStream
 import com.shinjikai.dictionary.data.findOfflineImportPayload
 import com.shinjikai.dictionary.data.replaceStagedDirectoryAtomically
@@ -52,9 +51,6 @@ import com.shinjikai.dictionary.data.stageDirectoryCopy
 import com.shinjikai.dictionary.data.stageDirectoryMergedCopy
 import com.shinjikai.dictionary.data.toBrowseSearchItem
 import java.io.File
-import java.io.FileInputStream
-import java.io.IOException
-import java.util.zip.ZipInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -87,6 +83,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     private val searchRefreshNonce = MutableStateFlow(0)
     private var detailsLoadJob: Job? = null
     private var dictionaryInstallJob: Job? = null
+    private var isOfflineDataOperationActive = false
     private val detailPrefetches = mutableMapOf<Int, Deferred<Result<WordDetailsResponse>>>()
     private var categoriesPreloadJob: Job? = null
     private val bookmarkMutationMutex = Mutex()
@@ -183,6 +180,8 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     var offlineImportStatus by mutableStateOf<String?>(null)
     var offlineLastImportEpochMs by mutableStateOf<Long?>(null)
     var offlineTermCount by mutableStateOf(0)
+    var isOfflineDictionaryStateLoaded by mutableStateOf(false)
+        private set
     var offlineLastImportSource by mutableStateOf<String?>(null)
     var installedDictionaries by mutableStateOf(installedDictionaryStore.read())
     val searchUiState: SearchUiState
@@ -197,7 +196,8 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             offlineImportError = offlineImportError,
             offlineImportStatus = offlineImportStatus,
             offlineImportPhase = offlineImportPhase,
-            offlineTermCount = offlineTermCount
+            offlineTermCount = offlineTermCount,
+            isOfflineDictionaryStateLoaded = isOfflineDictionaryStateLoaded
         )
 
     val detailUiState: DetailUiState
@@ -235,6 +235,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             offlineImportStatus = offlineImportStatus,
             offlineLastImportEpochMs = offlineLastImportEpochMs,
             offlineTermCount = offlineTermCount,
+            isOfflineDictionaryStateLoaded = isOfflineDictionaryStateLoaded,
             offlineLastImportSource = offlineLastImportSource,
             installedDictionaries = installedDictionaries.map { record ->
                 InstalledDictionaryUiItem(
@@ -261,7 +262,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     init {
         installBundledDictionaryIfNeeded()
         viewModelScope.launch { settingsStore.ensureOfflineMode() }
-        refreshOfflineTermCount()
+        refreshOfflineTermCount(waitForBundledInstall = true)
         refreshOfflinePreview()
 
         viewModelScope.launch {
@@ -381,9 +382,6 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         loadingDetails = true
 
         detailsLoadJob = viewModelScope.launch {
-            // The bundled importer runs during startup. Keep the detail request in the
-            // loading state until the database has a consistent dictionary snapshot.
-            dictionaryInstallJob?.join()
             val result = takePrefetchedDetails(item.id)?.await()
                 ?: repository.loadWordDetails(item.id)
             loadingDetails = false
@@ -402,7 +400,6 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         synchronized(detailPrefetches) {
             if (detailPrefetches[id]?.isActive == true) return
             detailPrefetches[id] = viewModelScope.async {
-                dictionaryInstallJob?.join()
                 repository.loadWordDetails(id)
             }
         }
@@ -617,35 +614,52 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun installBundledDictionaryIfNeeded(force: Boolean = false) {
-        if (!bundledDictionaryInstaller.hasBundledDictionary() || isImportingOfflineData) return
+        if (!bundledDictionaryInstaller.hasBundledDictionary() || isOfflineDataOperationActive) return
+        isOfflineDataOperationActive = true
         dictionaryInstallJob = viewModelScope.launch {
-            isImportingOfflineData = true
-            offlineImportError = false
-            offlineImportStatus = null
-            offlineImportProgress = 0f
-            offlineImportPhase = context.getString(R.string.offline_import_phase_prepare)
+            var workStarted = false
 
             Log.i(TAG, "Starting bundled dictionary install. force=$force")
             val result = bundledDictionaryInstaller.installIfNeeded(force = force) { phase, progress ->
+                if (!workStarted) {
+                    withContext(Dispatchers.Main.immediate) {
+                        workStarted = true
+                        isImportingOfflineData = true
+                        offlineImportError = false
+                        offlineImportStatus = null
+                        offlineImportProgress = 0f
+                    }
+                }
                 updateOfflineImportProgress(phase, progress)
             }
 
-            isImportingOfflineData = false
-            offlineImportPhase = null
+            isOfflineDataOperationActive = false
+            if (workStarted) {
+                isImportingOfflineData = false
+                offlineImportPhase = null
+            }
             result.onSuccess { installResult ->
                 offlineImportError = false
-                offlineImportProgress = 1f
-                if (installResult.available && installResult.installed) {
-                    offlineImportStatus = context.getString(
-                        R.string.offline_import_success,
-                        installResult.importedCount
-                    )
+                if (workStarted) offlineImportProgress = 1f
+                if (installResult.available && installResult.dictionaryImported) {
+                    offlineImportStatus = if (installResult.imagesInstalled) {
+                        context.getString(
+                            R.string.offline_import_success_with_images,
+                            installResult.importedCount
+                        )
+                    } else {
+                        context.getString(
+                            R.string.offline_import_success,
+                            installResult.importedCount
+                        )
+                    }
                     categoryNameById = emptyMap()
                     refreshOfflineTermCount()
                     refreshOfflinePreview()
                     dictionarySource = createDictionarySource()
+                } else if (installResult.available && installResult.imagesInstalled) {
+                    offlineImportStatus = context.getString(R.string.offline_images_install_success)
                 } else {
-                    offlineImportStatus = null
                     refreshOfflineTermCount()
                     refreshOfflinePreview()
                 }
@@ -681,18 +695,24 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { settingsStore.setHasSeenIntroduction(false) }
     }
 
-    fun refreshOfflineTermCount() {
+    fun refreshOfflineTermCount(waitForBundledInstall: Boolean = false) {
         viewModelScope.launch {
-            val snapshot = withContext(Dispatchers.IO) {
-                val dao = database.yomitanDao()
-                val count = dao.countTerms()
-                val epoch = dao.getMetaValue("last_import_epoch_ms")?.toLongOrNull()
-                val source = dao.getMetaValue("last_import_source")
-                Triple(count, epoch, source)
+            if (waitForBundledInstall) dictionaryInstallJob?.join()
+            val snapshot = runCatching {
+                withContext(Dispatchers.IO) {
+                    val dao = database.yomitanDao()
+                    val count = dao.countTerms()
+                    val epoch = dao.getMetaValue("last_import_epoch_ms")?.toLongOrNull()
+                    val source = dao.getMetaValue("last_import_source")
+                    Triple(count, epoch, source)
+                }
             }
-            offlineTermCount = snapshot.first
-            offlineLastImportEpochMs = snapshot.second
-            offlineLastImportSource = snapshot.third
+            snapshot.onSuccess { values ->
+                offlineTermCount = values.first
+                offlineLastImportEpochMs = values.second
+                offlineLastImportSource = values.third
+            }
+            isOfflineDictionaryStateLoaded = true
         }
     }
 
@@ -715,7 +735,14 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun importOfflineDictionaryFromUri(uri: Uri) {
-        if (isImportingOfflineData) return
+        if (isOfflineDataOperationActive) return
+        val archiveName = resolvePickedArchiveName(uri)?.trim().orEmpty()
+        if (!archiveName.endsWith(".zip", ignoreCase = true)) {
+            offlineImportError = true
+            offlineImportStatus = context.getString(R.string.offline_import_invalid_zip)
+            return
+        }
+        isOfflineDataOperationActive = true
         viewModelScope.launch {
             isImportingOfflineData = true
             offlineImportError = false
@@ -730,6 +757,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
             }
 
             isImportingOfflineData = false
+            isOfflineDataOperationActive = false
             offlineImportPhase = null
             result.onSuccess { importResult ->
                 offlineImportError = false
@@ -852,39 +880,7 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun importFromPickedArchive(uri: Uri): OfflineImportResult {
-        val archiveName = resolvePickedArchiveName(uri).orEmpty().lowercase()
-        return if (archiveName.endsWith(".tar.xz") || archiveName.endsWith(".txz")) {
-            importFromPickedTarXz(uri)
-        } else {
-            importFromPickedZip(uri)
-        }
-    }
-
-    private suspend fun importFromPickedTarXz(uri: Uri): OfflineImportResult {
-        return withContext(Dispatchers.IO) {
-            val targetDir = File(context.cacheDir, "picked-import/extracted")
-            try {
-                if (targetDir.exists()) {
-                    targetDir.deleteRecursively()
-                }
-                targetDir.mkdirs()
-
-                updateOfflineImportProgress(
-                    context.getString(R.string.offline_import_phase_index),
-                    0.15f
-                )
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    extractTarXzStream(input.buffered(), targetDir)
-                } ?: error("Unable to read selected archive.")
-
-                expandNestedOfflineArchives(targetDir)
-                processPickedImport(targetDir, pickedSourceLabel(uri, PICKED_TXZ_SHINJIKAI_SOURCE))
-            } finally {
-                if (targetDir.exists()) {
-                    targetDir.deleteRecursively()
-                }
-            }
-        }
+        return importFromPickedZip(uri)
     }
 
     private suspend fun processPickedImport(targetDir: File, sourceLabel: String): OfflineImportResult {
@@ -1065,17 +1061,6 @@ class ShinjikaiViewModel(app: Application) : AndroidViewModel(app) {
         if (recentSearches.removeAll { it.term.equals(normalized, ignoreCase = true) }) {
             val snapshot = recentSearches.toList()
             viewModelScope.launch { recentSearchStore.save(snapshot) }
-        }
-    }
-
-    private fun ensureValidOfflineImportZip(file: File) {
-        if (!file.exists() || file.length() <= 0L) {
-            throw IOException(context.getString(R.string.offline_import_failure))
-        }
-        ZipInputStream(FileInputStream(file).buffered()).use { zip ->
-            if (zip.nextEntry == null) {
-                throw IOException(context.getString(R.string.offline_import_invalid_zip))
-            }
         }
     }
 

@@ -1,6 +1,16 @@
 package com.shinjikai.dictionary
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
@@ -16,8 +26,12 @@ import androidx.compose.material3.NavigationBarItemColors
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.shinjikai.dictionary.ui.Screen
 
 @Composable
@@ -33,17 +47,50 @@ fun PrimaryBottomBar(
     val itemColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
         selectedTextColor = MaterialTheme.colorScheme.onSurface,
-        indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+        indicatorColor = Color.Transparent,
         unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
         unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
+    val selectedIndex = when (currentScreen) {
+        Screen.Browse -> 0
+        Screen.History -> 1
+        Screen.Search -> 2
+        Screen.Bookmarks -> 3
+        Screen.Settings -> 4
+        else -> 2
+    }
 
-    NavigationBar(
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        windowInsets = NavigationBarDefaults.windowInsets
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainer)
     ) {
+        val itemWidth = maxWidth / PRIMARY_ITEM_COUNT
+        val indicatorWidth = minOf(64.dp, itemWidth - 8.dp)
+        val indicatorX by animateDpAsState(
+            targetValue = itemWidth * selectedIndex + (itemWidth - indicatorWidth) / 2,
+            animationSpec = spring(
+                dampingRatio = 0.82f,
+                stiffness = 420f
+            ),
+            label = "bottomBarIndicatorX"
+        )
+
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorX, y = 12.dp)
+                .size(width = indicatorWidth, height = 32.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.extraLarge
+                )
+        )
+
+        NavigationBar(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            windowInsets = NavigationBarDefaults.windowInsets
+        ) {
                 BottomBarItem(
                     selected = currentScreen == Screen.Browse,
                     onClick = onBrowseClick,
@@ -110,6 +157,7 @@ fun PrimaryBottomBar(
                     colors = itemColors
                 )
         }
+    }
 }
 
 @Composable
@@ -120,11 +168,25 @@ private fun RowScope.BottomBarItem(
     label: String,
     colors: NavigationBarItemColors
 ) {
+    val iconScale by animateFloatAsState(
+        targetValue = if (selected) 1.10f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "bottomBarIconScale"
+    )
+
     NavigationBarItem(
         selected = selected,
         onClick = onClick,
         icon = {
-            icon(Modifier)
+            icon(
+                Modifier.graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+            )
         },
         label = {
             Text(
@@ -136,3 +198,5 @@ private fun RowScope.BottomBarItem(
         colors = colors
     )
 }
+
+private const val PRIMARY_ITEM_COUNT = 5

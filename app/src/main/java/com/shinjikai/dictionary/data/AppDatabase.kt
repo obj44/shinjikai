@@ -341,15 +341,60 @@ abstract class AppDatabase : RoomDatabase() {
                 "CREATE INDEX IF NOT EXISTS index_yomitan_term_categories_termId ON yomitan_term_categories(termId)"
             )
 
-            db.execSQL("DROP TABLE IF EXISTS yomitan_terms_fts")
-            db.execSQL("CREATE VIRTUAL TABLE yomitan_terms_fts USING fts4(expression, reading, glossary)")
-            db.execSQL(
-                """
-                INSERT INTO yomitan_terms_fts(rowid, expression, reading, glossary)
-                SELECT id, expression, reading, glossary
-                FROM yomitan_terms
-                """.trimIndent()
-            )
+            val expectedFtsColumns = setOf("expression", "reading", "glossary")
+            val hasUsableFtsTable = tableExists(db, "yomitan_terms_fts") &&
+                getTableColumns(db, "yomitan_terms_fts").containsAll(expectedFtsColumns)
+            if (!hasUsableFtsTable || !isFtsSynchronized(db)) {
+                rebuildFtsAtomically(db)
+            }
+        }
+
+        private fun isFtsSynchronized(db: SupportSQLiteDatabase): Boolean {
+            return runCatching {
+                val missingOrChangedRow = db.query(
+                    """
+                    SELECT 1
+                    FROM yomitan_terms AS terms
+                    LEFT JOIN yomitan_terms_fts AS fts ON fts.rowid = terms.id
+                    WHERE fts.rowid IS NULL
+                        OR fts.expression IS NOT terms.expression
+                        OR fts.reading IS NOT terms.reading
+                        OR fts.glossary IS NOT terms.glossary
+                    LIMIT 1
+                    """.trimIndent()
+                ).use { cursor -> cursor.moveToFirst() }
+                if (missingOrChangedRow) return@runCatching false
+
+                val orphanedFtsRow = db.query(
+                    """
+                    SELECT 1
+                    FROM yomitan_terms_fts AS fts
+                    LEFT JOIN yomitan_terms AS terms ON terms.id = fts.rowid
+                    WHERE terms.id IS NULL
+                    LIMIT 1
+                    """.trimIndent()
+                ).use { cursor -> cursor.moveToFirst() }
+                !orphanedFtsRow
+            }.getOrDefault(false)
+        }
+
+        private fun rebuildFtsAtomically(db: SupportSQLiteDatabase) {
+            val ownsTransaction = !db.inTransaction()
+            if (ownsTransaction) db.beginTransaction()
+            try {
+                db.execSQL("DROP TABLE IF EXISTS yomitan_terms_fts")
+                db.execSQL("CREATE VIRTUAL TABLE yomitan_terms_fts USING fts4(expression, reading, glossary)")
+                db.execSQL(
+                    """
+                    INSERT INTO yomitan_terms_fts(rowid, expression, reading, glossary)
+                    SELECT id, expression, reading, glossary
+                    FROM yomitan_terms
+                    """.trimIndent()
+                )
+                if (ownsTransaction) db.setTransactionSuccessful()
+            } finally {
+                if (ownsTransaction) db.endTransaction()
+            }
         }
 
         private fun tableExists(db: SupportSQLiteDatabase, table: String): Boolean {

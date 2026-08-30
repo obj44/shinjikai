@@ -98,7 +98,10 @@ fun SearchScreenContent(
     val showLanding = !hasActiveSearch && uiState.term.isBlank() && !isRefreshing && refreshError == null
     val showNoResults =
         hasActiveSearch && uiState.term.isNotBlank() && lazyResults.itemCount == 0 && !isRefreshing && refreshError == null
-    val offlineDictionaryUnavailable = useOfflineMode && !hasOfflineDictionary
+    val offlineDictionaryUnavailable = useOfflineMode && (
+        uiState.isImportingOfflineData ||
+            (uiState.isOfflineDictionaryStateLoaded && !hasOfflineDictionary)
+        )
     val landingSuggestions = remember {
         listOf(
             "猫",

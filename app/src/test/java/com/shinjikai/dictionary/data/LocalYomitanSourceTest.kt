@@ -127,6 +127,16 @@ class LocalYomitanSourceTest {
 
         override suspend fun clearCategoryRefs() = Unit
 
+        override suspend fun deleteCategoryRefsForSource(source: String) = Unit
+
+        override suspend fun deleteTermsFtsForSource(source: String) = Unit
+
+        override suspend fun deleteTermsForSource(source: String) = Unit
+
+        override suspend fun nextNegativeTermId(): Int = -1
+
+        override suspend fun setSourceEnabled(source: String, enabled: Boolean) = Unit
+
         override suspend fun countCategoryRefs(): Int = 0
 
         override suspend fun loadCategoryTermsPaged(categoryId: Int, limit: Int, offset: Int): List<YomitanTermListRow> = emptyList()
@@ -142,6 +152,10 @@ class LocalYomitanSourceTest {
         override suspend fun clearTermsFts() = Unit
 
         override suspend fun countTerms(): Int = 0
+
+        override suspend fun countTermsBySource(source: String): Int = 0
+
+        override suspend fun countFtsTermsBySource(source: String): Int = 0
 
         override suspend fun loadPreviewTerms(limit: Int): List<YomitanTermListRow> = emptyList()
 

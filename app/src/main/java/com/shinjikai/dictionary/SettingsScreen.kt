@@ -424,15 +424,11 @@ private fun InstalledDictionaryRow(
                         Text(fileName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
                     }
                 }
-                if (isImporting) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                } else {
-                    Switch(
-                        checked = dictionary.enabled,
-                        onCheckedChange = onToggle,
-                        enabled = !dictionary.isBuiltIn && !isImporting
-                    )
-                }
+                Switch(
+                    checked = dictionary.enabled,
+                    onCheckedChange = onToggle,
+                    enabled = !dictionary.isBuiltIn && !isImporting
+                )
             }
         }
     )
@@ -848,6 +844,8 @@ private fun LocalDictionarySummaryCard(
     val summary = when {
         uiState.isImportingOfflineData ->
             uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline)
+        !uiState.isOfflineDictionaryStateLoaded ->
+            stringResource(R.string.settings_loading_inline)
         uiState.offlineImportError ->
             uiState.offlineImportStatus ?: stringResource(R.string.offline_import_failure)
         hasOfflineDictionary ->
@@ -904,6 +902,8 @@ private fun OfflineImporterCard(
     val summaryText = when {
         uiState.isImportingOfflineData ->
             uiState.offlineImportPhase ?: stringResource(R.string.settings_loading_inline)
+        !uiState.isOfflineDictionaryStateLoaded ->
+            stringResource(R.string.settings_loading_inline)
         hasOfflineDictionary ->
             stringResource(R.string.settings_offline_import_summary_ready, uiState.offlineTermCount)
         else ->
@@ -1074,6 +1074,10 @@ private fun offlineImportStatusUi(
     return when {
         uiState.isImportingOfflineData -> OfflineImportStatusUi(
             label = stringResource(R.string.settings_offline_status_importing),
+            color = MaterialTheme.colorScheme.primary
+        )
+        !uiState.isOfflineDictionaryStateLoaded -> OfflineImportStatusUi(
+            label = stringResource(R.string.settings_loading_inline),
             color = MaterialTheme.colorScheme.primary
         )
         uiState.offlineImportError -> OfflineImportStatusUi(

@@ -1,7 +1,6 @@
 package com.shinjikai.dictionary.data
 
 import android.content.Context
-import android.os.Build
 import android.util.Log
 import com.shinjikai.dictionary.R
 import java.io.File
@@ -15,7 +14,8 @@ import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
 
 data class BundledDictionaryInstallResult(
     val available: Boolean,
-    val installed: Boolean,
+    val dictionaryImported: Boolean,
+    val imagesInstalled: Boolean,
     val importedCount: Int = 0
 )
 
@@ -39,34 +39,43 @@ class BundledDictionaryInstaller(
                 if (jsonlPaths.isEmpty()) {
                     return@withContext BundledDictionaryInstallResult(
                         available = false,
-                        installed = false
+                        dictionaryImported = false,
+                        imagesInstalled = false
                     )
                 }
 
                 val dao = database.yomitanDao()
+                val existingBundledCount = dao.countTermsBySource(BUNDLED_SOURCE_LABEL)
+                var existingBundledFtsCount = runCatching {
+                    dao.countFtsTermsBySource(BUNDLED_SOURCE_LABEL)
+                }.getOrDefault(0)
+
+                if (!force && existingBundledCount > 0 && existingBundledFtsCount != existingBundledCount) {
+                    // The dictionary rows are the durable installed state. If only the derived
+                    // search table is incomplete, rebuild it instead of parsing the bundle again.
+                    AppDatabase.repairOfflineDictionarySchema(database.openHelper.writableDatabase)
+                    existingBundledFtsCount = runCatching {
+                        dao.countFtsTermsBySource(BUNDLED_SOURCE_LABEL)
+                    }.getOrDefault(0)
+                }
+
+                if (!force && existingBundledCount > 0 && existingBundledFtsCount == existingBundledCount) {
+                    Log.i(TAG, "Bundled dictionary already installed; skipping import.")
+                    return@withContext BundledDictionaryInstallResult(
+                        available = true,
+                        dictionaryImported = false,
+                        imagesInstalled = false
+                    )
+                }
+
                 val imageArchivePaths = findImageArchiveAssetPaths()
                 val signature = buildAssetSignature(jsonlPaths, schemaVersion = BUNDLED_DATA_SCHEMA)
-                val existingSignature = dao.getMetaValue(META_BUNDLED_SIGNATURE)
-                val existingCount = dao.countTerms()
-                val existingBundledCount = dao.countTermsBySource(BUNDLED_SOURCE_LABEL)
-                val existingBundledFtsCount = dao.countFtsTermsBySource(BUNDLED_SOURCE_LABEL)
                 val installedImages = installBundledImagesIfNeeded(
                     imageArchivePaths = imageArchivePaths,
                     force = force,
                     onProgress = onProgress
                 )
                 val imageRoot = installedImages?.root ?: findImageAssetRoot()
-
-                if (!force && existingBundledCount > 0 && existingBundledFtsCount > 0 && existingSignature == signature) {
-                    imageRoot?.let { root ->
-                        dao.upsertMeta(YomitanMetaEntity(key = OFFLINE_IMAGE_DIR_META_KEY, value = root))
-                    }
-                    return@withContext BundledDictionaryInstallResult(
-                        available = true,
-                        installed = installedImages?.installed == true,
-                        importedCount = existingCount
-                    )
-                }
 
                 onProgress(context.getString(R.string.offline_import_phase_index), 0.08f)
                 Log.i(TAG, "Starting bundled dictionary import. imageRoot=$imageRoot")
@@ -88,7 +97,8 @@ class BundledDictionaryInstaller(
 
                 BundledDictionaryInstallResult(
                     available = true,
-                    installed = true,
+                    dictionaryImported = true,
+                    imagesInstalled = installedImages?.installed == true,
                     importedCount = importedCount
                 )
             }
@@ -219,15 +229,8 @@ class BundledDictionaryInstaller(
         assetPaths: List<String>,
         schemaVersion: Int? = null
     ): String {
-        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-        @Suppress("DEPRECATION")
-        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            packageInfo.longVersionCode
-        } else {
-            packageInfo.versionCode.toLong()
-        }
         val schemaPrefix = schemaVersion?.let { "schema$it-" }.orEmpty()
-        return "${schemaPrefix}v$versionCode:${assetPaths.joinToString("|") { path -> "$path:${assetByteLength(path)}" }}"
+        return "$schemaPrefix${assetPaths.joinToString("|") { path -> "$path:${assetByteLength(path)}" }}"
     }
 
     private fun openBundledImageArchive(assetPaths: List<String>): InputStream {

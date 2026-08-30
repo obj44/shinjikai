@@ -6,6 +6,12 @@
     id("androidx.baselineprofile")
 }
 
+val firebaseEnabled = file("google-services.json").isFile
+if (firebaseEnabled) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
+
 android {
     namespace = "com.shinjikai.dictionary"
     compileSdk = 36
@@ -14,8 +20,8 @@ android {
         applicationId = "com.shinjikai.dictionary"
         minSdk = 24
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.10"
+        versionCode = 12
+        versionName = "1.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -72,6 +78,14 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
 
     implementation(composeBom)
+    if (firebaseEnabled) {
+        implementation(platform("com.google.firebase:firebase-bom:34.16.0"))
+        implementation("com.google.firebase:firebase-analytics")
+        implementation("com.google.firebase:firebase-crashlytics")
+        // Play Services Basement still requests Fragment 1.1.0 transitively.
+        // Pin the current stable AndroidX release so it is not packaged in the AAB.
+        implementation("androidx.fragment:fragment:1.9.0")
+    }
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("com.google.code.gson:gson:2.11.0")

@@ -416,14 +416,15 @@ fun DetailScreenBody(
             }
         }
 
-        item {
-            zoomedPictureUrl?.let { imageUrl ->
-                ZoomableImageDialog(
-                    imageUrl = imageUrl,
-                    onDismiss = { zoomedPictureUrl = null }
-                )
-            }
-        }
+    }
+
+    // Keep overlays outside LazyColumn: lazy items that are off-screen are not composed,
+    // which previously made image taps appear to do nothing unless the list bottom was visible.
+    zoomedPictureUrl?.let { imageUrl ->
+        ZoomableImageDialog(
+            imageUrl = imageUrl,
+            onDismiss = { zoomedPictureUrl = null }
+        )
     }
 }
 

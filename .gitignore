@@ -7,6 +7,7 @@ captures/
 artifacts/
 .gradle-user-home/
 app/release/
+**/generated/
 
 # Local SDK config
 local.properties
@@ -32,6 +33,11 @@ hs_err_pid*
 *.jks
 *.keystore
 keystore.properties
+
+# Firebase configuration kept local
+**/google-services.json
+**/service-account*.json
+**/service_account*.json
 
 # Android Studio / IntelliJ caches
 .cxx/
