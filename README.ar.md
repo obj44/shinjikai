@@ -1,15 +1,15 @@
-# قاموس شينجيكاي للأندرويد
+<h1 align="center">قاموس شنجكاي للأندرويد</h1>
 
-[English](./README.md) | [العربية](./README.ar.md)
+<p align="center"><a href="./README.md">English</a> | العربية</p>
 
 <div dir="rtl" align="right">
+
+<p align="center">قاموس للكلمات اليابانية ومعانيها بالعربية، يعمل دون الاتصال بالإنترنت.</p>
 
 <p align="center">
   <a href="https://play.google.com/store/apps/details?id=com.shinjikai.dictionary"><img src="https://img.shields.io/badge/Google%20Play-Available-414141?logo=googleplay&logoColor=white&style=for-the-badge" alt="Get it on Google Play" height="40" /></a>
   <a href="#" aria-label="F-Droid coming soon"><img src="https://img.shields.io/badge/F--Droid-Coming%20soon-1976D2?logo=f-droid&logoColor=white&style=for-the-badge" alt="F-Droid coming soon" height="40" /></a>
 </p>
-
-قاموس ياباني–عربي لنظام أندرويد مبني باستخدام Kotlin وJetpack Compose. تتم فهرسة بيانات القاموس محليًا، لذلك يعمل البحث وعرض الكلمات بالكامل دون اتصال بالإنترنت.
 
 ## 📱 لقطات الشاشة
 
@@ -20,17 +20,12 @@
 
 > ⚠️ **إخلاء المسؤولية**
 >
-> هذا مشروع مستقل وغير تابع رسميًا لموقع شينجيكاي. تأتي بيانات القاموس المدمجة من [1Selxo/Shinjikai](https://github.com/1Selxo/Shinjikai)، ويعود الفضل فيها إلى المساهمين الأصليين.
+> هذا مشروع مستقل. مصدر بيانات القاموس هو [موقع شنجكاي](http://shinjikai.app).
 
 ## ✨ الميزات
 
 - 🔎 بحث سريع عن الكلمات باليابانية والعربية
-- 🧾 شاشة تفصيلية للكلمة تتضمن:
-  - الكانا والكانجي
-  - مستوى JLPT
-  - شرائح للتصنيفات
-  - تعريفات باللغة العربية
-  - قسم للكلمات ذات الصلة، مثل المرادفات والأضداد والروابط، عند توفرها
+- 🧾 تفاصيل شاملة للكلمات تشمل الكانا والكانجي ومستوى JLPT والتصنيفات والمعاني العربية والكلمات ذات الصلة
 - 🔖 العلامات المرجعية لحفظ الكلمات وإدارتها
 - 🕘 عمليات البحث الأخيرة
 - 📦 بحث يعمل بالكامل دون اتصال بالإنترنت، مع بيانات مدمجة ودعم لاستيراد قواميس Yomitan محليًا
@@ -63,11 +58,6 @@
 - `app/src/main/java/com/shinjikai/dictionary/data/` -> نماذج القاموس والمستودعات وأدوات الاستيراد وRoom والبحث المحلي
 - `app/src/main/res/` -> الموارد، مثل النصوص والسمات والأيقونات والخطوط
 
-## 🙌 الشكر
-
-- بيانات القاموس: **1Selxo/Shinjikai** (`https://github.com/1Selxo/Shinjikai`)
-- قواعد فكّ تصريف الكلمات اليابانية: **Yomitan** (`https://github.com/yomidevs/yomitan/tree/master/ext/js/language/ja`)، بترخيص GPL-3.0-or-later.
-
 ## 📦 الأصول المعجمية المدمجة
 
 يأتي التطبيق مزوّدًا بقاموس `1Selxo/Shinjikai` محليًا. لتحديث ملفات القاموس المدمجة، شغّل:
@@ -77,5 +67,11 @@
 ```
 
 ينزّل السكربت قاموس `1Selxo/Shinjikai` ويضع البيانات في `app/src/main/assets/bundled_dictionary/`، ثم يضغط ملفات `data_*.jsonl` بصيغة `.jsonl.xz` ويعيد ضغط الصور عندما يكون ذلك ممكنًا، ويخزّنها في ملفات `tar.xz` مجزأة ومتوافقة مع Git. عند التشغيل الأول، يستورد التطبيق ملفات JSONL المدمجة إلى Room/FTS ويستخرج الصور إلى مساحة تخزين التطبيق، ثم تعمل جميع عمليات البحث محليًا باستخدام فهارس SQLite.
+
+## ❤️ المساهمون والحقوق
+
+- المصدر الأساسي لبيانات القاموس: **[موقع شنجكاي](http://shinjikai.app)**
+- مجموعة بيانات القاموس المدمجة: **1Selxo/Shinjikai** (`https://github.com/1Selxo/Shinjikai`)
+- قواعد فكّ تصريف الكلمات اليابانية: **Yomitan** (`https://github.com/yomidevs/yomitan/tree/master/ext/js/language/ja`)، بترخيص GPL-3.0-or-later.
 
 </div>
